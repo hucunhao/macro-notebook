@@ -41,7 +41,7 @@ def fetch(url, path, headers=(), timeout=60, check=None, ua=UA):
 # ---------------------------------------------------------------- 1. 抓取
 FRED = ['BAA10Y','AAA10Y','BAMLH0A0HYM2','BAMLH0A3HYC','BAMLH0A1HYBB','BAMLH0A2HYB','BAMLC0A0CM','BAMLC0A4CBBB',
         'DGS10','DGS2','DGS30','DGS3MO','T10Y2Y','T10Y3M','DFII10','T10YIE','VIXCLS','NASDAQCOM','NASDAQ100',
-        'DTWEXBGS','DCOILWTICO','DCOILBRENTEU','CPILFESL','PCEPILFE','DFEDTARU','DFEDTARL','DEXCHUS','DEXUSEU','DEXJPUS']
+        'DTWEXBGS','DCOILWTICO','DCOILBRENTEU','CPILFESL','CPILFENS','PCEPILFE','DFEDTARU','DFEDTARL','DEXCHUS','DEXUSEU','DEXJPUS']
 ETFS = ['SPY','QQQ','RSP','IWM','HYG','JNK','LQD','GLD','TLT','UUP','USO','EEM','FXI','VGK']
 
 def fetch_all():
@@ -145,6 +145,19 @@ def build_series():
     add('BE10','10 年通胀预期（盈亏平衡）','%', [(d, s10[d]-dr[d]) for d in sorted(s10) if d in dr], '由 10 年名义减实际利率计算', fu('T10YIE'), '', 'rates')
     add('FEDU','联邦基金利率目标上限','%', read_fred('DFEDTARU'), F, fu('DFEDTARU'), '2008 年 12 月起。', 'rates')
     cpi = read_fred('CPILFESL')
+    # 先行条件② 用：BLS 口径的核心 CPI 同比 = 未季调指数(CPILFENS) 本月 / 去年同月 − 1（网页端再四舍五入到 1 位小数）
+    nsa = dict(read_fred('CPILFENS'))
+    nyoy = []
+    for d, v in sorted(nsa.items()):
+        p = f'{int(d[:4])-1}{d[4:]}'
+        if p in nsa: nyoy.append((d, (v/nsa[p]-1)*100))
+    add('CORECPI_NSA_YOY','核心 CPI 同比（BLS 口径，未季调）','%', nyoy, F, fu('CPILFENS'), '用未季调指数计算，和 BLS 公布口径一致。', 'macro', nd=6)
+    sa = dict(cpi); ks = sorted(sa); ann = []
+    for i, d in enumerate(ks):
+        y, m = int(d[:4]), int(d[5:7]); m3 = m - 3; y3 = y + (m3 - 1)//12; m3 = (m3 - 1) % 12 + 1
+        p = f'{y3:04d}-{m3:02d}-01'
+        if p in sa: ann.append((d, ((sa[d]/sa[p])**4 - 1)*100))
+    add('CORECPI_3M_ANN','核心 CPI 3 个月年化（季调）','%', ann, F, fu('CPILFESL'), '季调指数 3 个月变化的 4 次方年化，只做展示。', 'macro', nd=6)
     add('CORECPI_YOY','核心 CPI 同比','%', [(d, v) for d,v in yoy(cpi, 365)], F, fu('CPILFESL'), '月度数据，按同比计算（保留 6 位小数，先行条件②要比大小）。', 'macro', nd=6)
     # equities
     spx = read_mdY(os.path.join(RAW,'other','cboe_SPX.csv'), 'SPX')
