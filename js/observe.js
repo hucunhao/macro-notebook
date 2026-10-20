@@ -75,22 +75,32 @@ const Observe = (() => {
       const cut = new Date(U.ts(fs.d[n-1])*1000); cut.setUTCMonth(cut.getUTCMonth() - T.fed_months);
       const recent = lastChg && U.ts(lastChg.date)*1000 >= cut.getTime();
       const hiking = !!(lastChg && lastChg.to > lastChg.from && recent);
-      const m = cs.v.length, cpiNow = cs.v[m-1], cpi3 = cs.v[m-4];
-      t2 = { live: hiking && cpiNow > cpi3, text: `联储目标上限 ${fedNow.toFixed(2)}%；最近一次调整：${lastChg ? `${lastChg.date} 从 ${lastChg.from.toFixed(2)}% ${lastChg.to > lastChg.from ? '加息' : '降息'}到 ${lastChg.to.toFixed(2)}%` : '无'}（${hiking ? `是加息，且在最近 ${T.fed_months} 个月内` : `不满足“最近 ${T.fed_months} 个月内的加息”`}）；核心 CPI 同比 ${cpiNow.toFixed(3)}%（${cs.d[m-1].slice(0,7)}），3 个月前 ${cpi3.toFixed(3)}%（${cs.d[m-4].slice(0,7)}）：${cpiNow > cpi3 ? (cpiNow - cpi3 < 0.01 ? `只高 ${(cpiNow - cpi3).toFixed(5)} 个百分点，几乎持平，按字面规则算“上升”` : '在上升') : '没上升'}` };
+      // 核心 CPI 同比按 BLS 口径（未季调指数）四舍五入到 1 位小数，要比 3 个月前至少高 0.1 个百分点
+      const r1 = x => Math.round(x*10 + 1e-9)/10;
+      const ns = U.ser('CORECPI_NSA_YOY'), an = U.ser('CORECPI_3M_ANN');
+      const ld = ns ? U.last(ns.d) : null;
+      const pd = ld ? (() => { let y = +ld.slice(0,4), m = +ld.slice(5,7) - 3; if (m < 1){ m += 12; y--; } return `${y}-${String(m).padStart(2,'0')}-01`; })() : null;
+      const pi = ns ? ns.d.indexOf(pd) : -1;
+      const cNow = ns ? r1(U.last(ns.v)) : null, cPrev = pi >= 0 ? r1(ns.v[pi]) : null;
+      const rising = cNow != null && cPrev != null && cNow - cPrev >= 0.1 - 1e-9;
+      const annTxt = an ? `${U.last(an.v).toFixed(2)}%（${U.last(an.d).slice(0,7)}）` : '暂无数据';
+      t2 = { live: hiking && rising, text: `联储目标上限 ${fedNow.toFixed(2)}%；最近一次调整：${lastChg ? `${lastChg.date} 从 ${lastChg.from.toFixed(2)}% ${lastChg.to > lastChg.from ? '加息' : '降息'}到 ${lastChg.to.toFixed(2)}%` : '无'}（${hiking ? `是加息，且在最近 ${T.fed_months} 个月内` : `不满足“最近 ${T.fed_months} 个月内的加息”`}）。<br>核心 CPI 同比（BLS 口径，未季调，1 位小数）：${ld ? ld.slice(0,7) : '—'} <b>${cNow == null ? '—' : cNow.toFixed(1)}%</b>，3 个月前 ${pd ? pd.slice(0,7) : '—'} <b>${cPrev == null ? '—' : cPrev.toFixed(1)}%</b>（要至少高 0.1 个百分点：${rising ? '是' : '否'}）。<br>3 个月年化核心 CPI（季调）：${annTxt}（不计入触发条件）` };
     }
     const ws = U.ser('WTI');
     let t3 = { live: null, text: '暂无数据' };
     if (ws){
-      // 月末值：每个已结束月份的最后一个交易日
-      const me = {}; ws.d.forEach((d, i) => me[d.slice(0,7)] = [d, ws.v[i]]);
-      const curM = U.last(ws.d).slice(0,7); const months = Object.keys(me).filter(m => m < curM).sort();
-      const yoyOf = m => { const p = (+m.slice(0,4) - 1) + m.slice(4); return me[p] ? me[m][1]/me[p][1] - 1 : null; };
-      const last2 = months.slice(-2).map(m => ({ m, d: me[m][0], v: me[m][1], y: yoyOf(m) }));
+      // 月均价：每个月所有交易日收盘的平均；只用已经结束的月份
+      const mon = {}; ws.d.forEach((d, i) => { const k = d.slice(0,7); (mon[k] = mon[k] || []).push(ws.v[i]); });
+      const avg = k => mon[k] ? mon[k].reduce((a, b) => a + b, 0) / mon[k].length : null;
+      const curM = U.last(ws.d).slice(0,7); const months = Object.keys(mon).filter(m => m < curM).sort();
+      const yoyOf = m => { const p = (+m.slice(0,4) - 1) + m.slice(4); return avg(p) ? avg(m)/avg(p) - 1 : null; };
+      const last2 = months.slice(-2).map(m => ({ m, y: yoyOf(m), a: avg(m) }));
       const both = last2.length === 2 && last2.every(x => x.y != null && x.y*100 > T.oil_yoy);
+      const mtd = yoyOf(curM);
       const n = ws.v.length, w252 = ws.v.slice(n-252), max252 = Math.max(...w252), max20 = Math.max(...ws.v.slice(n-20));
       const hiDate = ws.d[n-252 + w252.indexOf(max252)];
       const newHigh = max20 >= max252;
-      t3 = { live: both && newHigh, text: `WTI 月末同比：${last2.map(x => `${x.m} ${U.sgn(x.y*100,1,'%')}`).join('，')}（两个都要 >+${T.oil_yoy}%：${both ? '是' : '否'}）；52 周最高收盘 ${max252.toFixed(2)}（${hiDate}），最近 20 个交易日最高 ${max20.toFixed(2)}（${newHigh ? '创了新高' : '没创新高'}）。数据是 FRED 的 WTI 现货价（库欣），最新 ${U.last(ws.d)}，用来近似近月期货` };
+      t3 = { live: both && newHigh, text: `WTI 现货月均价同比（对比去年同月月均）：${last2.map(x => `${x.m} ${U.sgn(x.y*100,1,'%')}`).join('，')}（最近 2 个完整月份都要 >+${T.oil_yoy}%：${both ? '是' : '否'}）；${curM} 月初至今 ${mtd == null ? '—' : U.sgn(mtd*100,1,'%')}（只做参考，${mon[curM].length} 个交易日）。<br>日度收盘：52 周最高 ${max252.toFixed(2)}（${hiDate}），最近 20 个交易日最高 ${max20.toFixed(2)}（${newHigh ? '创了新高' : '没创新高'}）。数据：FRED DCOILWTICO（WTI 现货，库欣），最新 ${U.last(ws.d)}` };
     }
     const t4 = { live: !!T.ai_stress, text: (T.ai_stress ? `手动判断：正在扩散。${T.ai_note ? '依据：' + T.ai_note + '。' : ''}` : '手动判断：没有扩散。') + `关掉的条件：${AI_OFF}（在门槛设置里切换）`, manual: true };
     const trig = [t1, t2, t3, t4]; const nLive = trig.filter(t => t.live).length;
@@ -162,8 +172,8 @@ const Observe = (() => {
       rule: (s, T) => { const c = s.last/s.prev21 - 1; return c > T.diag_usd/100 ? ['y', `1 个月 ${U.pct(c)}，美元大涨`] : ['g', `1 个月 ${U.pct(c)}`]; } },
     { manual:'dxy' },
     { id:'WTI', kind:'pct', nd:2, tv:'TVC:USOIL', read:'油价推高通胀，通胀让利率降不下来。（工程师补充）' },
-    { id:'WTI_YOY', kind:'pp', nd:1, trig:true, tv:'TVC:USOIL', hl: T => [{ y:T.oil_yoy, label:`${T.oil_yoy}%` }], read:'原油日度同比。你的先行条件 ③ 用的是月末值，要连续 2 个月末都超过，并且创 52 周新高。',
-      rule: (s, T) => s.last > T.oil_yoy ? ['y', `日度同比超过 ${T.oil_yoy}%（先行条件③看的是连续 2 个月末，见上方）`] : ['g', `日度同比没超过 ${T.oil_yoy}%`] },
+    { id:'WTI_YOY', kind:'pp', nd:1, trig:true, tv:'TVC:USOIL', hl: T => [{ y:T.oil_yoy, label:`${T.oil_yoy}%` }], read:'原油日度同比。你的先行条件 ③ 用的是月均价同比，要最近 2 个完整月份都超过，并且最近 20 个交易日创 52 周收盘新高。',
+      rule: (s, T) => s.last > T.oil_yoy ? ['y', `日度同比超过 ${T.oil_yoy}%（先行条件③看的是月均价，见上方）`] : ['g', `日度同比没超过 ${T.oil_yoy}%`] },
     { id:'BRENT', kind:'pct', nd:2, tv:'TVC:UKOIL', read:'全球油价基准。' },
     { id:'USDCNY', kind:'pct', nd:4, tv:'FX_IDC:USDCNY', read:'人民币汇率。你的 QDII 基金净值会受它影响：美元涨，人民币计的净值也跟着涨。（工程师补充）' },
     { id:'EURUSD', kind:'pct', nd:4, tv:'FX:EURUSD', read:'欧元兑美元。' },
@@ -281,7 +291,7 @@ const Observe = (() => {
       </div>
       <div class="grid g2" style="margin-top:14px">
         <div class="card"><h3 style="margin-top:0">你的 4 个先行条件 <span class="tag ${C.nLive>=2?'r':C.nLive?'y':'g'}">${C.nLive} / 4 成立</span></h3>
-          ${['① 信用：HY OAS > 350bp，且 IG OAS 63 个交易日走阔 > 20bp', '② 联储处在加息周期，且核心通胀在上升', '③ 原油连续 2 个月末同比 > 50%，且创 52 周新高', '④ AI 信用压力在扩散'].map((t, i) => { const x = C.trig[i]; const l = x.live == null ? 'n' : x.live ? 'r' : 'g';
+          ${['① 信用：HY OAS > 350bp，且 IG OAS 63 个交易日走阔 > 20bp', '② 联储处在加息周期，且核心 CPI 同比比 3 个月前高至少 0.1 个百分点', '③ 原油月均价连续 2 个月同比 > 50%，且最近 20 个交易日创 52 周收盘新高', '④ AI 信用压力在扩散'].map((t, i) => { const x = C.trig[i]; const l = x.live == null ? 'n' : x.live ? 'r' : 'g';
             return `<div class="trig"><span class="light ${l}"></span><div><b>${t}</b>　${x.live == null ? '暂无数据' : x.live ? '成立' : '不成立'}${x.manual ? ' <span class="tag">手动</span>' : ''}<br><span class="small muted">${x.text}</span></div></div>`; }).join('')}
           <p class="small" style="margin-bottom:0">${C.nLive >= 2 ? '<b>已有 2 条或以上成立</b>：按你的规则，每一档加仓拆成两半，间隔 4 周买入。' : '成立的不到 2 条：按你的规则，触发某一档时一次买完这一档。'}</p>
         </div>
