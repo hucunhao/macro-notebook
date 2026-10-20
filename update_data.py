@@ -117,12 +117,12 @@ def yoy(ser, lag_days=365):
 
 def build_series():
     S = {}
-    def add(id, name, unit, data, source, url, note='', group='', bp=False, start_cut='1990-01-01'):
+    def add(id, name, unit, data, source, url, note='', group='', bp=False, start_cut='1990-01-01', nd=4):
         data = [(d,v) for d,v in data if d >= start_cut]
         if bp: data = [(d, round(v*100, 1)) for d,v in data]
         S[id] = dict(name=name, unit=unit, source=source, url=url, note=note, group=group,
                      start=data[0][0] if data else None, end=data[-1][0] if data else None,
-                     d=[d for d,_ in data], v=[round(v,4) for _,v in data])
+                     d=[d for d,_ in data], v=[round(v,nd) for _,v in data])
     F = 'FRED（圣路易斯联储）'
     fu = lambda s: f'https://fred.stlouisfed.org/series/{s}'
     short3 = 'FRED 自 2026 年 4 月起只提供这条序列最近 3 年的数据，所以历史很短。'
@@ -145,7 +145,7 @@ def build_series():
     add('BE10','10 年通胀预期（盈亏平衡）','%', [(d, s10[d]-dr[d]) for d in sorted(s10) if d in dr], '由 10 年名义减实际利率计算', fu('T10YIE'), '', 'rates')
     add('FEDU','联邦基金利率目标上限','%', read_fred('DFEDTARU'), F, fu('DFEDTARU'), '2008 年 12 月起。', 'rates')
     cpi = read_fred('CPILFESL')
-    add('CORECPI_YOY','核心 CPI 同比','%', [(d, v) for d,v in yoy(cpi, 365)], F, fu('CPILFESL'), '月度数据，按同比计算。', 'macro')
+    add('CORECPI_YOY','核心 CPI 同比','%', [(d, v) for d,v in yoy(cpi, 365)], F, fu('CPILFESL'), '月度数据，按同比计算（保留 6 位小数，先行条件②要比大小）。', 'macro', nd=6)
     # equities
     spx = read_mdY(os.path.join(RAW,'other','cboe_SPX.csv'), 'SPX')
     add('SPX','标普 500 指数','点', spx, 'Cboe 官方历史', 'https://cdn.cboe.com/api/global/us_indices/daily_prices/SPX_History.csv', '价格指数，不含分红。', 'equity', start_cut='1975-01-01')
@@ -395,6 +395,14 @@ def main():
     dump('week2','W2',{k:v for k,v in w2.items()})
     dump('week1','W1',w1)
     write_md(w1, w2, S)
+    # 投资助手写的解读（markdown 原文），优先用 /workspace/quant_course 的最新版，否则用 content/ 里的副本
+    interp = {}
+    for wk in ('week1', 'week2'):
+        src = f'/workspace/quant_course/{wk}_interpretation.md'; loc = os.path.join(ROOT, 'content', f'{wk}_interpretation.md')
+        if os.path.exists(src):
+            os.makedirs(os.path.dirname(loc), exist_ok=True); open(loc, 'w').write(open(src).read())
+        if os.path.exists(loc): interp[wk] = open(loc).read()
+    dump('interp', 'INTERP', interp)
     for k,v in S['series'].items(): print(f"{k:12s} {v['start']} → {v['end']}  n={len(v['d'])}")
     print('status:', {k:v for k,v in STATUS.items() if v!='ok'} or 'all ok')
 if __name__ == '__main__': main()
