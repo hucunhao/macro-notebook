@@ -1,0 +1,5 @@
+{"_note":"这些数值是从网页上读到的单个数, 不是自动抓取的序列。每次更新请手动核对。",
+ "gold_spot":{"name":"现货黄金","value":4183.94,"unit":"美元/盎司","date":"2026-10-19","source":"goldprice.org","url":"https://goldprice.org/gold-price-today/2026-10-19"},
+ "gold_52w_high":{"name":"现货黄金 52 周高点","value":5477.79,"unit":"美元/盎司","date":"2026-10-19","source":"USA Today","url":"https://www.usatoday.com/story/money/personalfinance/2026/10/19/gold-price-on-october-19-2026/92326767007/"},
+ "dxy":{"name":"美元指数 DXY","value":101.97,"unit":"","date":"2026-10-19","source":"路透 / Investing.com","url":"https://www.investing.com/news/stock-market-news/asian-stocks-skid-wall-street-and-bonds-aided-by-oil-slip-4956176"}
+}
