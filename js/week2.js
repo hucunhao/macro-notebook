@@ -63,7 +63,7 @@ const Week2 = (() => {
         <li><b>肥尾。</b>利差的大跳动比钟形曲线预计的多得多，z = 3 对利差来说绝不是“千分之三才发生一次”。</li>
         <li><b>这一周只做描述。</b>某个 z 门槛能不能预测股市，要到第 3 周用预先定好的规则去检验。</li>
       </ul></div>
-      <div class="card" style="margin-top:14px"><h3 style="margin-top:0">解读</h3><p class="muted" style="margin:0">这一部分由投资助手根据上面的结果来写。按约定，第 1–2 周的结果<b>不改变</b>你现在的规则。</p></div>`);
+      <div class="card interp" style="margin-top:14px" id="w2-interp"></div>`);
     const sdUpd = () => { const a = U.$('#sd-in').value.split(/[,，\s]+/).map(Number).filter(x => !isNaN(x) && x !== 0 || x === 0); if (a.length < 2){ U.$('#sd-out').textContent = '至少输入 2 个数'; return; }
       const m = U.mean(a), d = a.map(x => Math.abs(x - m)), sd = Math.sqrt(U.mean(a.map(x => (x-m)**2)));
       U.$('#sd-out').innerHTML = `平均 ${+m.toFixed(2)}；距离 ${d.map(x => +x.toFixed(1)).join('、')}；标准差 ≈ <b>${sd.toFixed(1)}</b>`; };
@@ -72,6 +72,9 @@ const Week2 = (() => {
     ['#z-m','#z-s','#z-x'].forEach(k => U.$(k).oninput = zUpd);
 
     function drawLocked(){
+      const ip = U.$('#w2-interp');
+      if (ip) ip.innerHTML = !lockArea.dataset.ok ? '<h3 style="margin-top:0">解读</h3><p class="muted" style="margin:0">投资助手写的解读会揭晓上面两道题的答案，所以要等你提交猜测之后才显示。</p>'
+        : (window.INTERP && INTERP['week2'] ? U.md(INTERP['week2']) : '<h3 style="margin-top:0">解读</h3><p class="muted" style="margin:0">暂无解读。</p>');
       if (!lockArea.dataset.ok){ lockArea.innerHTML = `<div class="lockmsg">先在上面写下你对两个问题的猜测并提交，图表和结果才会出现。</div>`; return; }
       if (lockArea.dataset.drawn) return; lockArea.dataset.drawn = '1';
       const h = W2.HY_OAS, ig = U.ser('IG_OAS'), i = h.d.length-1;

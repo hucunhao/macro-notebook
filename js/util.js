@@ -30,5 +30,20 @@ const U = (() => {
   };
   const worst = (...ls) => ls.includes('r') ? 'r' : ls.includes('y') ? 'y' : ls.includes('g') ? 'g' : 'n';
   const lightName = l => ({g:'绿灯', y:'黄灯', r:'红灯', n:'无数据'}[l]);
-  return { $, $$, esc, ts, dstr, css, ser, last, stats, fmtNum, pct, sgn, median, mean, quant, store, worst, lightName };
+  // 极简 markdown：# 标题、- 列表、**粗体**、段落
+  function md(src){
+    const inl = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    const out = []; let list = false, para = [];
+    const flush = () => { if (para.length){ out.push('<p>' + inl(para.join(' ')) + '</p>'); para = []; } };
+    src.split(/\r?\n/).forEach(line => {
+      const l = line.trim();
+      if (/^#{1,6}\s/.test(l)){ flush(); if (list){ out.push('</ul>'); list = false; } const n = l.match(/^#+/)[0].length; out.push(`<h${Math.min(n+1,4)}>${inl(l.replace(/^#+\s*/, ''))}</h${Math.min(n+1,4)}>`); }
+      else if (/^\s*[-*]\s+/.test(line)){ flush(); if (!list){ out.push('<ul>'); list = true; } out.push('<li>' + inl(line.replace(/^\s*[-*]\s+/, '')) + '</li>'); }
+      else if (!l){ flush(); if (list){ out.push('</ul>'); list = false; } }
+      else { if (list){ out.push('</ul>'); list = false; } para.push(l); }
+    });
+    flush(); if (list) out.push('</ul>');
+    return out.join('');
+  }
+  return { md, $, $$, esc, ts, dstr, css, ser, last, stats, fmtNum, pct, sgn, median, mean, quant, store, worst, lightName };
 })();

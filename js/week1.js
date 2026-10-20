@@ -98,11 +98,14 @@ const Week1 = (() => {
         <li><b>只看价格，没算分红。</b>标普每年大约 1.5–2% 的分红没算进去，所以长期回报会被低估。</li>
         <li><b>你买的是 QDII 基金，不是指数本身。</b>还有汇率、费用、溢价和申购限额。</li>
       </ul></div>
-      <div class="card" style="margin-top:14px"><h3 style="margin-top:0">解读</h3><p class="muted" style="margin:0">这一部分由投资助手根据上面的结果来写，等你先做完猜测再看。按约定，第 1–2 周的结果<b>不改变</b>你现在的规则。</p></div>`);
+      <div class="card interp" style="margin-top:14px" id="w1-interp"></div>`);
 
     U.$('#c-hi').oninput = U.$('#c-now').oninput = () => { const a = +U.$('#c-hi').value, b = +U.$('#c-now').value; U.$('#c-out').textContent = a > 0 ? U.pct(b/a - 1).replace('-', '−') : '—'; };
 
     function drawLocked(){
+      const ip = U.$('#w1-interp');
+      if (ip) ip.innerHTML = !lockArea.dataset.ok ? '<h3 style="margin-top:0">解读</h3><p class="muted" style="margin:0">投资助手写的解读会揭晓上面两道题的答案，所以要等你提交猜测之后才显示。</p>'
+        : (window.INTERP && INTERP['week1'] ? U.md(INTERP['week1']) : '<h3 style="margin-top:0">解读</h3><p class="muted" style="margin:0">暂无解读。</p>');
       if (!lockArea.dataset.ok){ lockArea.innerHTML = `<div class="lockmsg">先在上面写下你对两个问题的猜测并提交，图表和结果才会出现。</div>`; return; }
       if (lockArea.dataset.drawn) return; lockArea.dataset.drawn = '1';
       lockArea.innerHTML = `

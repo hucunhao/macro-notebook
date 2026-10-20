@@ -14,13 +14,13 @@ const Observe = (() => {
   function compute(T){
     const R = {}; // 各区块的灯和规则
     const rules = [];
-    const add = (area, l, text) => rules.push({ area, l, text });
+    const add = (area, l, text, heur = true) => rules.push({ area, l, text, heur });
     // 信用
     const hy = lastv('HY_OAS'), hy1m = chg('HY_OAS', 21, 'abs'), ccc = lastv('CCC_OAS'), ccc1m = chg('CCC_OAS', 21, 'abs'), ig3m = chg('IG_OAS', 63, 'abs');
     let lc = 'n';
     if (hy != null){
       const lv = hy > T.hy_red ? 'r' : hy > T.hy_line ? 'y' : 'g';
-      add('信用', lv, `HY 利差 ${hy.toFixed(0)}bp（${lastd('HY_OAS')}）：${lv==='r' ? `高于红线 ${T.hy_red}bp` : lv==='y' ? `高于警戒线 ${T.hy_line}bp` : `低于警戒线 ${T.hy_line}bp`}`);
+      add('信用', lv, `HY 利差 ${hy.toFixed(0)}bp（${lastd('HY_OAS')}）：${lv==='r' ? `高于红线 ${T.hy_red}bp` : lv==='y' ? `高于 ${T.hy_line}bp（和先行条件①同一条线）` : `低于 ${T.hy_line}bp（和先行条件①同一条线）`}。红线 ${T.hy_red}bp 是临时经验值`, false);
       const sp = hy1m >= T.hy_speed_r ? 'r' : hy1m >= T.hy_speed_y ? 'y' : 'g';
       add('信用', sp, `HY 利差 1 个月变化 ${U.sgn(hy1m,0,'bp')}：${sp==='g' ? `没超过 +${T.hy_speed_y}bp` : `超过 +${sp==='r'?T.hy_speed_r:T.hy_speed_y}bp，在快速走阔`}`);
       lc = U.worst(lv, sp);
@@ -65,23 +65,34 @@ const Observe = (() => {
     const diagTxt = diag.rows[2] ? '跨资产：黄金和收益率同涨，最接近危险，盯紧信用。' : diag.rows[1] ? '跨资产：美元大涨同时股票下跌，像全球流动性收缩。' : diag.rows[0] ? '跨资产：收益率升、股票跌，属于纯杀估值，可逆。' : '跨资产：过去 1 个月没有对上诊断表里的任何一种病因。';
     // 先行条件
     const igv = lastv('IG_OAS');
-    const t1 = hy != null && ig3m != null ? { live: hy > T.hy_line && ig3m > T.ig_widen, text: `HY ${hy.toFixed(0)}bp（要 >${T.hy_line}），IG 3 个月变化 ${U.sgn(ig3m,0,'bp')}（要 >+${T.ig_widen}）` } : { live: null, text: '暂无数据' };
+    const t1 = hy != null && ig3m != null ? { live: hy > T.hy_line && ig3m > T.ig_widen, text: `HY OAS ${hy.toFixed(0)}bp（${lastd('HY_OAS')}，要 >${T.hy_line}bp）；IG OAS 63 个交易日变化 ${U.sgn(ig3m,0,'bp')}（${U.ser('IG_OAS').d[U.ser('IG_OAS').d.length-64]} → ${lastd('IG_OAS')}，要 >+${T.ig_widen}bp）` } : { live: null, text: '暂无数据' };
     const fs = U.ser('FEDU'), cs = U.ser('CORECPI_YOY');
     let t2 = { live: null, text: '暂无数据' };
     if (fs && cs){
-      const n = fs.v.length, fedNow = fs.v[n-1]; let i = n-1; const t0 = U.ts(fs.d[n-1]) - 182*86400; while (i > 0 && U.ts(fs.d[i]) > t0) i--;
-      const hiking = fedNow > fs.v[i];
+      // 最近一次调整是加息，并且发生在最近 fed_months 个月内（加息后暂停仍算加息周期）
+      const n = fs.v.length, fedNow = fs.v[n-1]; let k = n-1; while (k > 0 && fs.v[k-1] === fs.v[k]) k--;
+      const lastChg = k > 0 ? { date: fs.d[k], from: fs.v[k-1], to: fs.v[k] } : null;
+      const cut = new Date(U.ts(fs.d[n-1])*1000); cut.setUTCMonth(cut.getUTCMonth() - T.fed_months);
+      const recent = lastChg && U.ts(lastChg.date)*1000 >= cut.getTime();
+      const hiking = !!(lastChg && lastChg.to > lastChg.from && recent);
       const m = cs.v.length, cpiNow = cs.v[m-1], cpi3 = cs.v[m-4];
-      t2 = { live: hiking && cpiNow > cpi3, text: `联储目标上限 ${fedNow.toFixed(2)}%，半年前 ${fs.v[i].toFixed(2)}%（${hiking ? '在加息' : '没有加息'}）；核心 CPI 同比 ${cpiNow.toFixed(2)}%（${cs.d[m-1].slice(0,7)}），3 个月前 ${cpi3.toFixed(2)}%（${cpiNow > cpi3 ? '在上升' : '没上升'}）` };
+      t2 = { live: hiking && cpiNow > cpi3, text: `联储目标上限 ${fedNow.toFixed(2)}%；最近一次调整：${lastChg ? `${lastChg.date} 从 ${lastChg.from.toFixed(2)}% ${lastChg.to > lastChg.from ? '加息' : '降息'}到 ${lastChg.to.toFixed(2)}%` : '无'}（${hiking ? `是加息，且在最近 ${T.fed_months} 个月内` : `不满足“最近 ${T.fed_months} 个月内的加息”`}）；核心 CPI 同比 ${cpiNow.toFixed(3)}%（${cs.d[m-1].slice(0,7)}），3 个月前 ${cpi3.toFixed(3)}%（${cs.d[m-4].slice(0,7)}）：${cpiNow > cpi3 ? (cpiNow - cpi3 < 0.01 ? `只高 ${(cpiNow - cpi3).toFixed(5)} 个百分点，几乎持平，按字面规则算“上升”` : '在上升') : '没上升'}` };
     }
-    const ws = U.ser('WTI'), wy = lastv('WTI_YOY');
+    const ws = U.ser('WTI');
     let t3 = { live: null, text: '暂无数据' };
-    if (ws && wy != null){
-      const n = ws.v.length, max252 = Math.max(...ws.v.slice(n-252)), max20 = Math.max(...ws.v.slice(n-20));
+    if (ws){
+      // 月末值：每个已结束月份的最后一个交易日
+      const me = {}; ws.d.forEach((d, i) => me[d.slice(0,7)] = [d, ws.v[i]]);
+      const curM = U.last(ws.d).slice(0,7); const months = Object.keys(me).filter(m => m < curM).sort();
+      const yoyOf = m => { const p = (+m.slice(0,4) - 1) + m.slice(4); return me[p] ? me[m][1]/me[p][1] - 1 : null; };
+      const last2 = months.slice(-2).map(m => ({ m, d: me[m][0], v: me[m][1], y: yoyOf(m) }));
+      const both = last2.length === 2 && last2.every(x => x.y != null && x.y*100 > T.oil_yoy);
+      const n = ws.v.length, w252 = ws.v.slice(n-252), max252 = Math.max(...w252), max20 = Math.max(...ws.v.slice(n-20));
+      const hiDate = ws.d[n-252 + w252.indexOf(max252)];
       const newHigh = max20 >= max252;
-      t3 = { live: wy > T.oil_yoy && newHigh, text: `WTI 同比 ${U.sgn(wy,0,'%')}（要 >${T.oil_yoy}%），最近 20 个交易日${newHigh ? '创过' : '没创'} 1 年新高（WTI ${U.last(ws.v).toFixed(2)}，${U.last(ws.d)}）` };
+      t3 = { live: both && newHigh, text: `WTI 月末同比：${last2.map(x => `${x.m} ${U.sgn(x.y*100,1,'%')}`).join('，')}（两个都要 >+${T.oil_yoy}%：${both ? '是' : '否'}）；52 周最高收盘 ${max252.toFixed(2)}（${hiDate}），最近 20 个交易日最高 ${max20.toFixed(2)}（${newHigh ? '创了新高' : '没创新高'}）。数据是 FRED 的 WTI 现货价（库欣），最新 ${U.last(ws.d)}，用来近似近月期货` };
     }
-    const t4 = { live: !!T.ai_stress, text: T.ai_stress ? `你手动判断为“正在扩散”。${T.ai_note ? '依据：' + T.ai_note : ''}` : '你手动判断为“没有扩散”（在门槛设置里改）。这一条没有现成数据。', manual: true };
+    const t4 = { live: !!T.ai_stress, text: (T.ai_stress ? `手动判断：正在扩散。${T.ai_note ? '依据：' + T.ai_note + '。' : ''}` : '手动判断：没有扩散。') + `关掉的条件：${AI_OFF}（在门槛设置里切换）`, manual: true };
     const trig = [t1, t2, t3, t4]; const nLive = trig.filter(t => t.live).length;
     // 分档
     function tier(id, ts){
@@ -102,8 +113,8 @@ const Observe = (() => {
       rule: (s, T) => { const c = s.last - s.prev21; return s.last > T.hy_red ? ['r', `高于红线 ${T.hy_red}bp`] : c >= T.hy_speed_r ? ['r', `1 个月走阔 ${c.toFixed(0)}bp，超过 ${T.hy_speed_r}`] : c >= T.hy_speed_y ? ['y', `1 个月走阔 ${c.toFixed(0)}bp，超过 ${T.hy_speed_y}`] : s.last > T.hy_line ? ['y', `高于警戒线 ${T.hy_line}bp`] : ['g', `低于 ${T.hy_line}bp，1 个月变化 ${U.sgn(c,0,'bp')}`]; } },
     { id:'CCC_OAS', kind:'bp', nd:0, upBad:true, tv:'FRED:BAMLH0A3HYC', read:'CCC 是最弱一层、最先裂。盯最弱的一层，看速度不看水平。',
       rule: (s, T) => { const c = s.last - s.prev21; return c >= T.ccc_speed_r ? ['r', `1 个月走阔 ${c.toFixed(0)}bp，超过 ${T.ccc_speed_r}`] : c >= T.ccc_speed_y ? ['y', `1 个月走阔 ${c.toFixed(0)}bp，超过 ${T.ccc_speed_y}`] : ['g', `1 个月变化 ${U.sgn(c,0,'bp')}`]; } },
-    { id:'IG_OAS', kind:'bp', nd:0, upBad:true, tv:'FRED:BAMLC0A0CM', read:'投资级很少违约；它也开始走阔，说明压力已蔓延到优质层。',
-      rule: (s, T) => { const c = s.last - s.prev63; return c > T.ig_widen ? ['y', `3 个月走阔 ${c.toFixed(0)}bp，超过 ${T.ig_widen}`] : ['g', `3 个月变化 ${U.sgn(c,0,'bp')}，没超过 +${T.ig_widen}`]; } },
+    { id:'IG_OAS', kind:'bp', nd:0, upBad:true, trig:true, tv:'FRED:BAMLC0A0CM', read:'投资级很少违约；它也开始走阔，说明压力已蔓延到优质层。',
+      rule: (s, T) => { const c = s.last - s.prev63; return c > T.ig_widen ? ['y', `63 个交易日走阔 ${c.toFixed(0)}bp，超过 ${T.ig_widen}`] : ['g', `63 个交易日变化 ${U.sgn(c,0,'bp')}，没超过 +${T.ig_widen}`]; } },
     { id:'BAA10Y', kind:'bp', nd:0, upBad:true, tv:'FRED:BAA10Y', range:'5Y', read:'更慢、更结构性的信用压力背景读数。' },
     { id:'HYG', kind:'pct', nd:2, tv:'AMEX:HYG', read:'垃圾债价格。股跌但 HYG 不跌 = 普通回调；HYG 跟跌 + 加速 = 危险。' },
     { id:'HYG_LQD', kind:'pct', nd:4, tv:'AMEX:HYG/AMEX:LQD', read:'高收益 ÷ 投资级。下行 = 风险偏好收缩、信用走弱的快速代理。',
@@ -151,8 +162,8 @@ const Observe = (() => {
       rule: (s, T) => { const c = s.last/s.prev21 - 1; return c > T.diag_usd/100 ? ['y', `1 个月 ${U.pct(c)}，美元大涨`] : ['g', `1 个月 ${U.pct(c)}`]; } },
     { manual:'dxy' },
     { id:'WTI', kind:'pct', nd:2, tv:'TVC:USOIL', read:'油价推高通胀，通胀让利率降不下来。（工程师补充）' },
-    { id:'WTI_YOY', kind:'pp', nd:1, tv:'TVC:USOIL', hl: T => [{ y:T.oil_yoy, label:`${T.oil_yoy}%` }], read:'原油同比。你的先行条件 ③ 用它。',
-      rule: (s, T) => s.last > T.oil_yoy ? ['y', `同比超过 ${T.oil_yoy}%`] : ['g', `同比没超过 ${T.oil_yoy}%`] },
+    { id:'WTI_YOY', kind:'pp', nd:1, trig:true, tv:'TVC:USOIL', hl: T => [{ y:T.oil_yoy, label:`${T.oil_yoy}%` }], read:'原油日度同比。你的先行条件 ③ 用的是月末值，要连续 2 个月末都超过，并且创 52 周新高。',
+      rule: (s, T) => s.last > T.oil_yoy ? ['y', `日度同比超过 ${T.oil_yoy}%（先行条件③看的是连续 2 个月末，见上方）`] : ['g', `日度同比没超过 ${T.oil_yoy}%`] },
     { id:'BRENT', kind:'pct', nd:2, tv:'TVC:UKOIL', read:'全球油价基准。' },
     { id:'USDCNY', kind:'pct', nd:4, tv:'FX_IDC:USDCNY', read:'人民币汇率。你的 QDII 基金净值会受它影响：美元涨，人民币计的净值也跟着涨。（工程师补充）' },
     { id:'EURUSD', kind:'pct', nd:4, tv:'FX:EURUSD', read:'欧元兑美元。' },
@@ -200,7 +211,7 @@ const Observe = (() => {
       <div class="chg"><span>1 周 <b class="${chgCls(st.last, st.prev5, cfg)}">${fmtChg(st.last, st.prev5, cfg)}</b></span><span>1 月 <b class="${chgCls(st.last, st.prev21, cfg)}">${fmtChg(st.last, st.prev21, cfg)}</b></span><span>3 月 <b class="${chgCls(st.last, st.prev63, cfg)}">${fmtChg(st.last, st.prev63, cfg)}</b></span></div>
       ${st.pos != null ? `<div class="rangebar" title="在过去一年最低到最高之间的位置"><i style="left:calc(${(st.pos*100).toFixed(1)}% - 1px)"></i></div>
       <div class="rangelbl"><span>一年最低 ${fmtVal(st.lo, cfg)}</span><span>位置 ${(st.pos*100).toFixed(0)}%</span><span>一年最高 ${fmtVal(st.hi, cfg)}</span></div>` : ''}
-      ${rule ? `<div class="rule"><span class="light ${rule[0]}"></span><span>${rule[1]}</span></div>` : ''}
+      ${rule ? `<div class="rule"><span class="light ${rule[0]}"></span><span>${rule[1]}${cfg.trig ? '<span class="muted small">（你的先行条件）</span>' : `<br><span class="muted small">门槛：${HEUR}</span>`}</span></div>` : ''}
       <div class="chartbox"></div>
       <div class="read">${cfg.read}${cfg.readNote ? `<br><span class="muted small">${cfg.readNote}</span>` : ''}</div>
       ${short ? `<div class="note">注意：${short}</div>` : ''}
@@ -263,17 +274,19 @@ const Observe = (() => {
         <div class="muted" style="margin-top:4px">${C.diagTxt}</div>
         <div class="lights">${lights.map(([n, l]) => `<span><span class="light ${l}"></span>${n}：${U.lightName(l)}</span>`).join('')}</div>
         <details><summary>为什么这样判断（每条规则和它的结果）</summary>
-          <ul class="rules">${C.rules.map(r => `<li><span class="light ${r.l}"></span><span><b>${r.area}</b>　${r.text}</span></li>`).join('')}</ul>
+          <ul class="rules">${C.rules.map(r => `<li><span class="light ${r.l}"></span><span><b>${r.area}</b>　${r.text}${r.heur ? `　<span class="tag warn">${HEUR}</span>` : ''}</span></li>`).join('')}</ul>
+          <p class="small"><span class="tag warn">${HEUR}</span> 这些门槛是工程师先定的经验值（包括 10 年美债 4.75% / 5.25%、VIX 30 / 15、HY 走阔速度、CCC 走阔速度、广度门槛），第 3 周起逐个用历史数据检验。HY 350bp 来自你的先行条件①。</p>
           <p class="small muted">判断顺序：信用红灯 → “信用断裂”；信用黄灯 → “信用松动”；信用绿灯时，若 VIX 高于恐慌线或恐惧贪婪低于极度恐惧线 → “信用平静中的恐慌”；否则利率高于参考线 → “利率压估值”；VIX 低于自满线且恐惧贪婪高于极度贪婪线 → “平静但自满”；都没有 → “平稳”。所有门槛都能在右上角“门槛设置”里改。</p>
         </details>
       </div>
       <div class="grid g2" style="margin-top:14px">
         <div class="card"><h3 style="margin-top:0">你的 4 个先行条件 <span class="tag ${C.nLive>=2?'r':C.nLive?'y':'g'}">${C.nLive} / 4 成立</span></h3>
-          ${['① 信用：HY 利差 > 警戒线，且 IG 利差 3 个月走阔超过门槛', '② 联储在加息，且核心通胀在上升', '③ 原油同比大涨，且创新高', '④ AI 信用压力在扩散'].map((t, i) => { const x = C.trig[i]; const l = x.live == null ? 'n' : x.live ? 'r' : 'g';
+          ${['① 信用：HY OAS > 350bp，且 IG OAS 63 个交易日走阔 > 20bp', '② 联储处在加息周期，且核心通胀在上升', '③ 原油连续 2 个月末同比 > 50%，且创 52 周新高', '④ AI 信用压力在扩散'].map((t, i) => { const x = C.trig[i]; const l = x.live == null ? 'n' : x.live ? 'r' : 'g';
             return `<div class="trig"><span class="light ${l}"></span><div><b>${t}</b>　${x.live == null ? '暂无数据' : x.live ? '成立' : '不成立'}${x.manual ? ' <span class="tag">手动</span>' : ''}<br><span class="small muted">${x.text}</span></div></div>`; }).join('')}
           <p class="small" style="margin-bottom:0">${C.nLive >= 2 ? '<b>已有 2 条或以上成立</b>：按你的规则，每一档加仓拆成两半，间隔 4 周买入。' : '成立的不到 2 条：按你的规则，触发某一档时一次买完这一档。'}</p>
         </div>
         <div class="card"><h3 style="margin-top:0">你的分档加仓：现在离触发还有多远</h3>
+          ${C.nLive >= 2 ? `<div class="split-alert">先行条件已有 ${C.nLive} 条成立：<b>加仓每档拆成两半，间隔 4 周</b></div>` : `<div class="split-note">先行条件成立 ${C.nLive} 条（不到 2 条）：触发某一档时一次买完这一档。</div>`}
           ${['SPX', 'NDX'].map(k => { const t = C.tiers[k]; if (!t) return '<div class="nodata">暂无数据</div>'; const nm = k === 'SPX' ? '标普 500' : '纳指 100'; const maxT = Math.max(...t.tiers) + 5;
             return `<div><b>${nm}</b>　${U.fmtNum(t.last, 2)}（${t.date}），历史最高 ${U.fmtNum(t.high, 2)}（${t.highDate}），现在回撤 <b>${U.pct(t.dd)}</b>
               <div class="ddbar"><div class="fill" style="width:${Math.min(100, -t.dd*100/maxT*100)}%"></div>
