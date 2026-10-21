@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-宏观观察站 数据更新脚本
+Market Dashboard 数据更新脚本
 用法:  python3 update_data.py            # 联网抓取最新数据, 失败的源沿用 raw/ 里的旧文件
        python3 update_data.py --offline  # 不联网, 只用 raw/ 里已有文件重建 data/
 产出:  data/series.json + data/series.js   (观察页用的所有序列)
@@ -248,7 +248,7 @@ def build_markets():
         def on_or_before(t):
             c = [d for d in ds if d <= t]; return c[-1] if c else None
         pts = [('最新', last), ('1 周前', on_or_before(last - dt.timedelta(days=7))), ('1 个月前', on_or_before(last - dt.timedelta(days=30))),
-               ('年初', on_or_before(dt.date(last.year, 1, 1) - dt.timedelta(days=1)))]
+               ('1 年前', on_or_before(last - dt.timedelta(days=365)))]
         curve = dict(mats=[m for _,m,_ in MATS], labels=[l for _,_,l in MATS],
                      lines=[dict(name=n, date=d.isoformat(), y=rows[d]) for n,d in pts if d],
                      source='美国财政部 每日国债平价收益率曲线', url='https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve')
@@ -465,6 +465,12 @@ def main():
             os.makedirs(os.path.dirname(loc), exist_ok=True); open(loc, 'w').write(open(src).read())
         if os.path.exists(loc): interp[wk] = open(loc).read()
     dump('interp', 'INTERP', interp)
+    # 扩展数据（全球股指、商品汇率、经济日历、财报日历、QDII 溢价）：任何一块失败都不影响上面的核心数据
+    try:
+        import extra_data
+        extra_data.run()
+    except Exception as e:
+        print('extra_data 失败（不影响核心数据）：', e)
     for k,v in S['series'].items(): print(f"{k:12s} {v['start']} → {v['end']}  n={len(v['d'])}")
     print('status:', {k:v for k,v in STATUS.items() if v!='ok'} or 'all ok')
 if __name__ == '__main__': main()
