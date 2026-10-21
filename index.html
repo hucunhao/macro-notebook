@@ -9,21 +9,32 @@
 <script>try{var t=localStorage.getItem('ms_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 </head>
 <body>
-<header class="top"><div class="wrap">
+<header class="top"><div class="wrap wide">
   <div class="brand">宏观观察本</div>
   <nav class="main" id="nav">
-    <a href="#/observe" data-r="observe">观察</a>
-    <a href="#/learn/1" data-r="learn">学习</a>
-    <a href="#/notes" data-r="notes">笔记</a>
-    <a href="#/sources" data-r="sources">数据来源</a>
+    <a href="#/observe" data-r="observe">总览</a>
+    <a href="#/mkt" data-r="mkt"><span class="code">MKT</span>市场</a>
+    <a href="#/fi" data-r="fi"><span class="code">FI</span>债券</a>
+    <a href="#/cr" data-r="cr"><span class="code">CR</span>信用</a>
+    <a href="#/gp" data-r="gp"><span class="code">GP</span>技术</a>
+    <a href="#/val" data-r="val"><span class="code">VAL</span>估值</a>
+    <a href="#/hm" data-r="hm"><span class="code">HM</span>热力图</a>
+    <a href="#/br" data-r="br"><span class="code">BR</span>广度</a>
+    <a href="#/rv" data-r="rv"><span class="code">RV</span>同业</a>
+    <a href="#/learn/1" data-r="learn"><span class="code">LRN</span>学习</a>
+    <span class="navsep"></span>
+    <a href="#/all" data-r="all" class="minor">全部指标</a>
+    <a href="#/notes" data-r="notes" class="minor">笔记</a>
+    <a href="#/sources" data-r="sources" class="minor">来源</a>
   </nav>
   <div class="tools">
+    <button class="btn" id="btn-cmd" title="输入功能代码跳转（按 / 键）">代码 /</button>
     <button class="btn" id="btn-settings" title="调整判断用的门槛">门槛设置</button>
-    <button class="btn" id="btn-theme" title="切换深色 / 浅色">深色</button>
+    <button class="btn" id="btn-theme" title="切换深色 / 浅色">浅色</button>
   </div>
 </div></header>
 <main><div class="wrap" id="app"><p class="muted">正在加载数据…</p></div></main>
-<footer><div class="wrap">
+<footer><div class="wrap wide">
   <div id="foot-data"></div>
   <div>本页只用于个人学习和观察，不构成任何投资建议。数据可能有延迟或错误，请以官方来源为准。</div>
 </div></footer>
@@ -33,11 +44,16 @@
 <script src="data/week1.js"></script>
 <script src="data/week2.js"></script>
 <script src="data/week3.js"></script>
+<script src="data/markets.js"></script>
+<script src="data/sp500.js"></script>
 <script src="data/interp.js"></script>
 <script src="js/util.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/observe.js"></script>
+<script src="js/home.js"></script>
+<script src="js/markets.js"></script>
+<script src="js/pages2.js"></script>
 <script src="js/week1.js"></script>
 <script src="js/week2.js"></script>
 <script src="js/week3.js"></script>

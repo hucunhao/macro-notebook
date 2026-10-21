@@ -15,7 +15,16 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 RAW = os.path.join(ROOT, 'raw'); OUT = os.path.join(ROOT, 'data')
 OFFLINE = '--offline' in sys.argv
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+# 诚实的请求头：说明这是个人研究脚本，不伪装成浏览器
+HUA = "macro-notebook/1.0 (personal research script)"
+# CNN 只接受浏览器样式的请求头。按“不伪装浏览器绕过拦截”的约定，默认不抓 CNN，沿用上次文件；
+# 只有手动设置环境变量 MS_CNN_BROWSER_UA=1 才会按旧方式抓取。
+CNN_BROWSER_UA = os.environ.get('MS_CNN_BROWSER_UA') == '1'
 TODAY = dt.date.today()
+# 课程结果 markdown 写到哪里：本机是 /workspace/quant_course；在 GitHub Actions 等别的机器上写到 content/results
+QC = os.environ.get('MS_QC_DIR', '/workspace/quant_course')
+try: os.makedirs(QC, exist_ok=True)
+except OSError: QC = os.path.join(ROOT, 'content', 'results'); os.makedirs(QC, exist_ok=True)
 STATUS = {}   # source -> ok / cached / missing
 
 def fetch(url, path, headers=(), timeout=60, check=None, ua=UA):
@@ -44,6 +53,9 @@ FRED = ['BAA10Y','AAA10Y','BAMLH0A0HYM2','BAMLH0A3HYC','BAMLH0A1HYBB','BAMLH0A2H
         'DGS10','DGS2','DGS30','DGS3MO','T10Y2Y','T10Y3M','DFII10','T10YIE','VIXCLS','NASDAQCOM','NASDAQ100',
         'DTWEXBGS','DCOILWTICO','DCOILBRENTEU','CPILFESL','CPILFENS','DTB3','PCEPILFE','DFEDTARU','DFEDTARL','DEXCHUS','DEXUSEU','DEXJPUS']
 ETFS = ['SPY','QQQ','RSP','IWM','HYG','JNK','LQD','GLD','TLT','UUP','USO','EEM','FXI','VGK']
+# 标普 11 个行业 SPDR ETF（市场页用）
+SECTORS = [('XLK','信息技术'),('XLC','通信服务'),('XLY','可选消费'),('XLF','金融'),('XLV','医疗保健'),('XLI','工业'),
+           ('XLP','必需消费'),('XLE','能源'),('XLB','材料'),('XLU','公用事业'),('XLRE','房地产')]
 
 def fetch_all():
     os.makedirs(os.path.join(RAW,'fred'), exist_ok=True)
@@ -58,15 +70,19 @@ def fetch_all():
     for yr in (y-1, y):
         for typ, nm in (('daily_treasury_yield_curve','par'),('daily_treasury_real_yield_curve','real')):
             p = os.path.join(RAW,'treasury',f'treasury_{nm}_yields_{yr}.csv')
-            STATUS[f'Treasury:{nm}{yr}'] = fetch(f'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{yr}/all?type={typ}&field_tdr_date_value={yr}&page&_format=csv', p, check=lambda t: t.startswith('Date'))
-    STATUS['Cboe:SPX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/SPX_History.csv', os.path.join(RAW,'other','cboe_SPX.csv'), check=lambda t: t.startswith('DATE'))
-    STATUS['Cboe:VVIX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/VVIX_History.csv', os.path.join(RAW,'other','cboe_VVIX.csv'), check=lambda t: t.startswith('DATE'))
-    STATUS['Cboe:VIX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv', os.path.join(RAW,'other','cboe_VIX.csv'), check=lambda t: t.startswith('DATE'))
+            STATUS[f'Treasury:{nm}{yr}'] = fetch(f'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{yr}/all?type={typ}&field_tdr_date_value={yr}&page&_format=csv', p, check=lambda t: t.startswith('Date'), ua=HUA)
+    STATUS['Cboe:SPX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/SPX_History.csv', os.path.join(RAW,'other','cboe_SPX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA)
+    STATUS['Cboe:VVIX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/VVIX_History.csv', os.path.join(RAW,'other','cboe_VVIX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA)
+    STATUS['Cboe:VIX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv', os.path.join(RAW,'other','cboe_VIX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA)
     frm = (TODAY - dt.timedelta(days=3700)).isoformat()
-    for t in ETFS:
+    for t in ETFS + [x for x,_ in SECTORS]:
         STATUS['Nasdaq:'+t] = fetch(f'https://api.nasdaq.com/api/quote/{t}/historical?assetclass=etf&fromdate={frm}&todate={TODAY}&limit=99999',
-              os.path.join(RAW,'nasdaq',t+'.json'), headers=['Accept: application/json'], check=lambda s: '"rows"' in s)
+              os.path.join(RAW,'nasdaq',t+'.json'), headers=['Accept: application/json'], check=lambda s: '"rows"' in s, ua=HUA)
         time.sleep(0.5)
+    if not CNN_BROWSER_UA:
+        for k, f in (('CNN:F&G 1y','cnn_fear_greed.json'), ('CNN:F&G 2020+','cnn_fear_greed_since2020.json')):
+            STATUS[k] = 'skipped' if os.path.exists(os.path.join(RAW,'cnn',f)) else 'missing'
+        return
     hd = ['Referer: https://www.cnn.com/', 'Origin: https://www.cnn.com']
     STATUS['CNN:F&G 1y'] = fetch('https://production.dataviz.cnn.io/index/fearandgreed/graphdata', os.path.join(RAW,'cnn','cnn_fear_greed.json'), headers=hd, check=lambda s: 'fear_and_greed' in s)
     STATUS['CNN:F&G 2020+'] = fetch('https://production.dataviz.cnn.io/index/fearandgreed/graphdata/2020-07-15', os.path.join(RAW,'cnn','cnn_fear_greed_since2020.json'), headers=hd, check=lambda s: 'fear_and_greed' in s)
@@ -216,6 +232,34 @@ def build_series():
     meta = dict(generated=dt.datetime.now().strftime('%Y-%m-%d %H:%M'), tz='台北时间', status=STATUS)
     return dict(meta=meta, series=S, fg=fg, manual=manual)
 
+# ---------------------------------------------------------------- 2b. 市场页：收益率曲线 + 行业 ETF
+MATS = [('1 Mo',1,'1月'),('2 Mo',2,'2月'),('3 Mo',3,'3月'),('4 Mo',4,'4月'),('6 Mo',6,'6月'),('1 Yr',12,'1年'),('2 Yr',24,'2年'),('3 Yr',36,'3年'),
+        ('5 Yr',60,'5年'),('7 Yr',84,'7年'),('10 Yr',120,'10年'),('20 Yr',240,'20年'),('30 Yr',360,'30年')]
+def build_markets():
+    rows = {}
+    for f in sorted(os.listdir(os.path.join(RAW,'treasury'))):
+        if f.startswith('treasury_par_yields_'):
+            for r in csv.DictReader(open(os.path.join(RAW,'treasury',f))):
+                d = dt.datetime.strptime(r['Date'],'%m/%d/%Y').date()
+                rows[d] = [float(r[c]) if r.get(c) else None for c,_,_ in MATS]
+    curve = None
+    if rows:
+        ds = sorted(rows); last = ds[-1]
+        def on_or_before(t):
+            c = [d for d in ds if d <= t]; return c[-1] if c else None
+        pts = [('最新', last), ('1 周前', on_or_before(last - dt.timedelta(days=7))), ('1 个月前', on_or_before(last - dt.timedelta(days=30))),
+               ('年初', on_or_before(dt.date(last.year, 1, 1) - dt.timedelta(days=1)))]
+        curve = dict(mats=[m for _,m,_ in MATS], labels=[l for _,_,l in MATS],
+                     lines=[dict(name=n, date=d.isoformat(), y=rows[d]) for n,d in pts if d],
+                     source='美国财政部 每日国债平价收益率曲线', url='https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve')
+    sec = []
+    for t, nm in SECTORS:
+        x = read_nasdaq(t)
+        if x: sec.append(dict(id=t, name=nm, d=[d for d,_ in x], v=[round(v,2) for _,v in x]))
+    spy = read_nasdaq('SPY')
+    return dict(curve=curve, sectors=sec, spy=dict(id='SPY', name='标普 500（SPY）', d=[d for d,_ in spy], v=[round(v,2) for _,v in spy]),
+                sector_source='纳斯达克官网（SPDR 行业 ETF 日收盘价，约 10 年，不含分红）')
+
 # ---------------------------------------------------------------- 3. Week 1: 回撤与分档
 def drawdown_analysis(dates, px, tiers, start='1990-01-01'):
     """与 js/analysis.js 同一算法。tiers 为正数百分比, 如 [10,20,30]"""
@@ -354,7 +398,7 @@ def f1(x, pctv=True, nd=1):
     return f'{x*100:+.{nd}f}%' if pctv else f'{x:.{nd}f}'
 
 def write_md(w1, w2, S):
-    qc = '/workspace/quant_course'; os.makedirs(qc, exist_ok=True)
+    qc = QC
     L = [f'# Week 1 结果：回撤与分档加仓（价格指数，不含分红）', '',
          f'生成时间：{S["meta"]["generated"]}（台北时间）。数据：标普 500 = Cboe SPX 官方历史（{w1["SPX"]["first"]} 起，统计从 1990-01-01 开始，前高包含 1990 年以前的收盘）；纳指 100 = FRED NASDAQ100（{w1["NDX"]["first"]} 起，统计从 1990-01-01 开始）。最后日期：SPX {w1["SPX"]["last"]}，NDX {w1["NDX"]["last"]}。',
          '', '定义：回撤 = 收盘 / 截至当日最高收盘 − 1。事件 = 回撤首次越过某档开始，到再创新高结束；同一事件中每档最多计一次。12 个月 = 252 个交易日；“后续最深再跌” = 触发后 252 个交易日内最低收盘 / 触发价 − 1。不足 252 天的标“未完成”，不计入统计。', '',
@@ -409,13 +453,14 @@ def main():
     dump('week2','W2',{k:v for k,v in w2.items()})
     dump('week1','W1',w1)
     import week3_backtest
-    w3 = week3_backtest.build(read_fred, S, RAW)
+    w3 = week3_backtest.build(read_fred, S, RAW, QC)
     dump('week3','W3',w3)
+    dump('markets','MK',build_markets())
     write_md(w1, w2, S)
     # 投资助手写的解读（markdown 原文），优先用 /workspace/quant_course 的最新版，否则用 content/ 里的副本
     interp = {}
     for wk in ('week1', 'week2', 'week3'):
-        src = f'/workspace/quant_course/{wk}_interpretation.md'; loc = os.path.join(ROOT, 'content', f'{wk}_interpretation.md')
+        src = os.path.join(QC, f'{wk}_interpretation.md'); loc = os.path.join(ROOT, 'content', f'{wk}_interpretation.md')
         if os.path.exists(src):
             os.makedirs(os.path.dirname(loc), exist_ok=True); open(loc, 'w').write(open(src).read())
         if os.path.exists(loc): interp[wk] = open(loc).read()
