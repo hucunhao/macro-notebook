@@ -166,9 +166,14 @@ canvas.hist{width:100%;height:260px;display:block}
 .panel>.ph .s{color:var(--ink3);font-size:12px}
 .panel>.ph .r{margin-left:auto;display:flex;gap:6px;align-items:center}
 .panel>.pb{padding:6px 10px;flex:1;min-height:0;display:flex;flex-direction:column}
-.ticker{display:flex;gap:0;border:1px solid var(--line);background:var(--paper);border-radius:var(--radius);overflow-x:auto;margin-bottom:8px}
+.ticker{border:1px solid var(--line);background:var(--paper);border-radius:var(--radius);overflow:hidden;margin-bottom:8px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 24px,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(90deg,transparent,#000 24px,#000 calc(100% - 24px),transparent)}
+.ticker .track{display:flex;width:max-content;animation:tkscroll 70s linear infinite}
+.ticker .track .dup{display:flex}
+.ticker:hover .track{animation-play-state:paused}
+@keyframes tkscroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion:reduce){.ticker{overflow-x:auto;scrollbar-width:none}.ticker::-webkit-scrollbar{display:none}.ticker .track{animation:none}.ticker .track .dup{display:none}}
 .ticker .tk{padding:5px 9px;border-right:1px solid var(--line);white-space:nowrap;line-height:1.35}
-.ticker .tk:last-child{border-right:none;margin-left:auto}
+.ticker .tk{flex:none}
 .ticker .k{font-size:11.5px;color:var(--ink3)}
 .ticker .v{font-family:var(--mono);font-size:14px;font-weight:600}
 .ticker .c{font-family:var(--mono);font-size:12px;margin-left:6px}
