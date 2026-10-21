@@ -51,6 +51,18 @@ const Charts = (() => {
         ],
         hooks: { drawAxes: [u => {
           const ctx = u.ctx; ctx.save();
+          (opts.xbands||[]).forEach(b => {
+            const a = Math.max(b[0], u.scales.x.min), c = Math.min(b[1], u.scales.x.max); if (c <= a) return;
+            const x0 = u.valToPos(a, 'x', true), x1 = u.valToPos(c, 'x', true);
+            ctx.fillStyle = opts.xbandColor || U.css('--y-soft'); ctx.fillRect(x0, u.bbox.top, Math.max(1, x1 - x0), u.bbox.height);
+          });
+          (opts.xlines||[]).forEach(l => {
+            if (l.t < u.scales.x.min || l.t > u.scales.x.max) return;
+            const x = Math.round(u.valToPos(l.t, 'x', true)) + .5;
+            ctx.strokeStyle = U.css('--ink3'); ctx.lineWidth = devicePixelRatio; ctx.setLineDash([4*devicePixelRatio, 3*devicePixelRatio]);
+            ctx.beginPath(); ctx.moveTo(x, u.bbox.top); ctx.lineTo(x, u.bbox.top + u.bbox.height); ctx.stroke(); ctx.setLineDash([]);
+            if (l.label){ ctx.fillStyle = U.css('--ink3'); ctx.font = `${11*devicePixelRatio}px sans-serif`; ctx.fillText(l.label, x + 4*devicePixelRatio, u.bbox.top + 12*devicePixelRatio); }
+          });
           (opts.bands||[]).forEach(b => {
             const y1 = u.valToPos(Math.min(b.to, u.scales.y.max), 'y', true), y0 = u.valToPos(Math.max(b.from, u.scales.y.min), 'y', true);
             if (y0 > y1){ ctx.fillStyle = b.color; ctx.fillRect(u.bbox.left, y1, u.bbox.width, y0 - y1); }

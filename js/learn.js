@@ -3,7 +3,7 @@ const Learn = (() => {
   const WEEKS = [
     { n:1, title:'回撤：你的分档加仓多久触发一次', ready:true },
     { n:2, title:'信用利差 z 分数', ready:true },
-    { n:3, title:'信用 + VIX 规则检验', plan:[
+    { n:3, title:'信用 + VIX 规则检验', ready:true, plan:[
       '问题：“VIX > 30 且信用平静时买入”这条规则，历史上真的比随便哪天买入好吗？信用不平静时又怎样？',
       '先把规则和基准写死（包括“信用平静”用第 2 周的哪个 z 门槛），再去跑数据，所有试过的版本都记下来。',
       '工具：选择 VIX 门槛和信用门槛，看触发了几次独立事件、之后 1/3/12 个月的结果，和基准并排。',
@@ -34,6 +34,7 @@ const Learn = (() => {
     const w = WEEKS[n-1];
     if (n === 1) return Week1.render(app);
     if (n === 2) return Week2.render(app);
+    if (n === 3) return Week3.render(app);
     app.insertAdjacentHTML('beforeend', `<h1>第 ${n} 周　${w.title}</h1><div class="card placeholder"><p class="muted">这一周还没做，下面是计划。每一周的结构都一样：要回答的问题 → 先猜 → 概念卡 → 互动工具 → 结果和基准 → 要小心的坑。</p><ul>${w.plan.map(p => `<li>${p}</li>`).join('')}</ul></div>`);
   }
   return { render, WEEKS };
