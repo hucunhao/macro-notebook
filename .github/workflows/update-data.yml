@@ -43,8 +43,10 @@ jobs:
           restore-keys: raw-
 
       - name: 建好 raw/ 子文件夹
-        run: mkdir -p raw/fred raw/treasury raw/other raw/nasdaq raw/cnn raw/sp500
+        run: mkdir -p raw/fred raw/treasury raw/other raw/nasdaq raw/cnn raw/sp500 raw/em raw/cal raw/earnings raw/qdii
 
+      # 这一步也会跑 extra_data.py（全球股指、商品汇率、经济日历、财报日历、QDII 溢价）。
+      # 扩展数据每一块单独容错：东方财富等来源连不上时沿用缓存/上一版文件，不会让这一步失败。
       - name: 抓取宏观序列并重建 data/
         env:
           MS_QC_DIR: ${{ runner.temp }}/quant_course   # 课程结果 markdown 写到临时目录，不进仓库
