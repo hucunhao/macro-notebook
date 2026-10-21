@@ -9,6 +9,7 @@
 浏览器从 file:// 打开时不能 fetch JSON, 所以每个 JSON 同时写一份 .js (window.XXX = {...})。
 """
 import csv, json, os, sys, time, math, datetime as dt, statistics as st, subprocess, bisect
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 RAW = os.path.join(ROOT, 'raw'); OUT = os.path.join(ROOT, 'data')
@@ -41,7 +42,7 @@ def fetch(url, path, headers=(), timeout=60, check=None, ua=UA):
 # ---------------------------------------------------------------- 1. 抓取
 FRED = ['BAA10Y','AAA10Y','BAMLH0A0HYM2','BAMLH0A3HYC','BAMLH0A1HYBB','BAMLH0A2HYB','BAMLC0A0CM','BAMLC0A4CBBB',
         'DGS10','DGS2','DGS30','DGS3MO','T10Y2Y','T10Y3M','DFII10','T10YIE','VIXCLS','NASDAQCOM','NASDAQ100',
-        'DTWEXBGS','DCOILWTICO','DCOILBRENTEU','CPILFESL','CPILFENS','PCEPILFE','DFEDTARU','DFEDTARL','DEXCHUS','DEXUSEU','DEXJPUS']
+        'DTWEXBGS','DCOILWTICO','DCOILBRENTEU','CPILFESL','CPILFENS','DTB3','PCEPILFE','DFEDTARU','DFEDTARL','DEXCHUS','DEXUSEU','DEXJPUS']
 ETFS = ['SPY','QQQ','RSP','IWM','HYG','JNK','LQD','GLD','TLT','UUP','USO','EEM','FXI','VGK']
 
 def fetch_all():
@@ -407,6 +408,9 @@ def main():
     dump('series','MS',S)
     dump('week2','W2',{k:v for k,v in w2.items()})
     dump('week1','W1',w1)
+    import week3_backtest
+    w3 = week3_backtest.build(read_fred, S, RAW)
+    dump('week3','W3',w3)
     write_md(w1, w2, S)
     # 投资助手写的解读（markdown 原文），优先用 /workspace/quant_course 的最新版，否则用 content/ 里的副本
     interp = {}
