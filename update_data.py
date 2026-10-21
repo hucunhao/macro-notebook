@@ -414,7 +414,7 @@ def main():
     write_md(w1, w2, S)
     # 投资助手写的解读（markdown 原文），优先用 /workspace/quant_course 的最新版，否则用 content/ 里的副本
     interp = {}
-    for wk in ('week1', 'week2'):
+    for wk in ('week1', 'week2', 'week3'):
         src = f'/workspace/quant_course/{wk}_interpretation.md'; loc = os.path.join(ROOT, 'content', f'{wk}_interpretation.md')
         if os.path.exists(src):
             os.makedirs(os.path.dirname(loc), exist_ok=True); open(loc, 'w').write(open(src).read())

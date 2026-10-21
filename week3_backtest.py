@@ -60,14 +60,16 @@ def signals(cal, baa, vix, wk):
             out['LC'][k] = 0 if (out['L'][k] == 0 and out['C'][k] == 0) else 1
     return out
 
-def simulate(cal, px, cash_d, wk, sig, lag, cost):
+SIGLOG = []  # (index, run, rule, signal_date, exec_date, direction)
+
+def simulate(cal, px, cash_d, wk, sig, lag, cost, log=None):
     """信号在第 k 周末算出，在第 k+1 周末收盘执行（再加 lag 个交易日）；执行日扣成本，次日起生效"""
-    n = len(cal); execs = {}
+    n = len(cal); execs = {}; src = {}
     for k in range(len(wk)-1):
         s = sig[k]
         if s is None: continue
         e = wk[k+1] + lag
-        if e < n: execs[e] = s
+        if e < n: execs[e] = s; src[e] = k
     pos = [1]*n; cur = 1; switches = []; first = None
     eq = [1.0]*n
     for d in range(1, n):
@@ -77,6 +79,7 @@ def simulate(cal, px, cash_d, wk, sig, lag, cost):
             if first is None: first = d
             if execs[d] != cur:
                 eq[d] *= (1-cost); cur = execs[d]; switches.append(d)
+                if log is not None: log.append((cal[wk[src[d]]], cal[d], 'off' if cur == 0 else 'on'))
         pos[d] = cur
     return eq, pos, switches, first
 
@@ -141,6 +144,7 @@ def episode_row(cal, px, eq, pos, switches, wk, sig, ep):
                 back_before_trough=back_before_trough, avoided=avoided, reentry=re_d, missed=missed)
 
 def build(read_fred, S, raw_dir, qc_dir='/workspace/quant_course'):
+    SIGLOG.clear()
     spx = list(zip(S['series']['SPX']['d'], S['series']['SPX']['v']))
     ndx = list(zip(S['series']['NDX']['d'], S['series']['NDX']['v']))
     baa_raw = read_fred('BAA10Y'); vix_raw = read_fred('VIXCLS'); tb = read_fred('DTB3')
@@ -164,7 +168,9 @@ def build(read_fred, S, raw_dir, qc_dir='/workspace/quant_course'):
             first_k = next(k for k, s in enumerate(sig[r]) if s is not None)
             R['rules'][r] = dict(first_signal=cal[wk[first_k]], runs={})
             for run, cfg in RUNS.items():
-                eq, pos, sw, first_exec = simulate(cal, px, cash_d, wk, sig[r], cfg['lag'], cfg['cost'])
+                lg = []
+                eq, pos, sw, first_exec = simulate(cal, px, cash_d, wk, sig[r], cfg['lag'], cfg['cost'], lg)
+                SIGLOG.extend((key, run, r, a, b, c) for a, b, c in lg)
                 i0 = first_exec - 1 if first_exec else 0
                 m_is = metrics(cal, eq, pos, cash_d, sw, i0, is_end); b_is = metrics(cal, bh_eq, bh_pos, cash_d, [], i0, is_end)
                 m_oos = metrics(cal, eq, pos, cash_d, sw, oos0, last); b_oos = metrics(cal, bh_eq, bh_pos, cash_d, [], oos0, last)
@@ -183,7 +189,17 @@ def build(read_fred, S, raw_dir, qc_dir='/workspace/quant_course'):
         cash='FRED DTB3（3 个月国库券），按 252 个交易日折算成日收益。', ndx='纳指 100 价格指数（FRED NASDAQ100），作为第二组。')
     res['tr_check'] = tr_check(read_fred, S, raw_dir)
     write_md(res, qc_dir)
+    write_signal_csv(os.path.join(qc_dir, 'week3_signal_dates.csv'))
     return res
+
+def write_signal_csv(path):
+    # 给第 6 周置换检验用：只导出 C、L+C、L 的实际切换（信号周末日期 → 实际执行日）
+    import csv
+    name = {'L':'L', 'C':'C', 'LC':'L+C'}
+    rows = sorted((x for x in SIGLOG if x[2] in name), key=lambda x: (x[0], x[1], ['C','LC','L'].index(x[2]), x[4]))
+    with open(path, 'w', newline='') as f:
+        w = csv.writer(f); w.writerow(['index', 'run', 'rule', 'signal_date', 'exec_date', 'direction'])
+        for ix, run, r, sd, ed, dr in rows: w.writerow([ix, run, name[r], sd, ed, dr])
 
 def tr_check(read_fred, S, raw_dir):
     """探索性：用 Shiller 月度股息给标普价格补上分红（近似总回报），只覆盖到 Shiller 数据最后一个月"""
