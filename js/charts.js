@@ -50,7 +50,7 @@ const Charts = (() => {
           const pad = (b-a)*0.08 || 1; return [a-pad, b+pad]; } } },
         axes: [
           { stroke: C.ink, grid:{ stroke:C.grid, width:1 }, ticks:{ stroke:C.grid }, font:'11px sans-serif',
-            values: (u, vals) => vals.map(v => { if (v == null) return ""; const d = new Date(v*1000); return span > 3*365*86400 ? d.getUTCFullYear()+'' : span > 200*86400 ? `${String(d.getUTCFullYear()).slice(2)}/${d.getUTCMonth()+1}` : `${d.getUTCMonth()+1}/${d.getUTCDate()}`; }) },
+            values: (u, vals) => vals.map(v => { if (v == null) return ""; const d = new Date((v+43200)*1000); return span > 3*365*86400 ? (d.getUTCMonth() === 0 && d.getUTCDate() <= 7 ? d.getUTCFullYear()+'' : `${String(d.getUTCFullYear()).slice(2)}/${d.getUTCMonth()+1}`) : span > 200*86400 ? `${String(d.getUTCFullYear()).slice(2)}/${d.getUTCMonth()+1}` : `${d.getUTCMonth()+1}/${d.getUTCDate()}`; }) },
           { stroke: C.ink, grid:{ stroke:C.grid, width:1 }, ticks:{ stroke:C.grid }, font:'11px sans-serif', size: opts.axisSize || 52,
             values: (u, vals) => vals.map(v => v == null ? "" : opts.axisFmt ? opts.axisFmt(v) : (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : +v.toFixed(2))) }
         ],

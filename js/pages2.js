@@ -1,4 +1,4 @@
-// 第二层页面：CR 信用、VAL 估值、HM 热力图、BR 广度、RV 同业比较
+// 信用、估值、热力图、广度、同业比较
 const Pages2 = (() => {
   const { panel, fmtP, heat } = Markets;
   const noSP = '<div class="nodata">数据暂不可得：标普 500 成分股数据还没生成（运行 constituents.py）。</div>';
@@ -10,22 +10,22 @@ const Pages2 = (() => {
   // ---------- CR ----------
   function cr(app){
     const CR = Home.creditC(), T = Settings.get();
-    const ids = [['HY_OAS', '高收益债 HY'], ['BB_OAS', 'BB 级'], ['CCC_OAS', 'CCC 级（最弱）'], ['IG_OAS', '投资级 IG'], ['BAA10Y', 'BAA − 10 年美债']];
+    const ids = [['HY_OAS', '高收益债 HY'], ['BB_OAS', 'BB 级'], ['CCC_OAS', 'CCC 级（最弱）'], ['IG_OAS', '投资级 IG'], ['BAA10Y', 'Baa − 10 年美债']];
     const row = ([id, n]) => { const s = U.ser(id); if (!s) return `<tr><td>${n}</td><td colspan="5">暂无数据</td></tr>`; const t = U.stats(s); const c = (b) => b == null ? '—' : `<span class="${t.last - b > 0 ? 'neg' : t.last - b < 0 ? 'pos' : ''}">${U.sgn(t.last - b, 0)}</span>`;
       return `<tr><td>${n}</td><td>${t.last.toFixed(0)}</td><td>${c(t.prev5)}</td><td>${c(t.prev21)}</td><td>${c(t.prev63)}</td><td>${s.start}</td></tr>`; };
-    app.innerHTML = `<div class="mk-grid">
-      ${panel('', 'C 规则：BAA10Y 63 个交易日变化', '黄色底 = 规则处在离场期', CR ? `<div class="kv"><span class="big ${CR.now > 0 ? 'neg' : 'pos'}">${U.sgn(CR.now, 0, 'bp')}</span><span>现在：<b>${CR.state === 'off' ? '离场' : '在场'}</b></span><span>上次切换 <b>${CR.since}</b></span><span>离场线 +${Home.C3.off}bp，回来线 ${Home.C3.on}</span></div>
-        <div class="weak">第 3 周：C 和 L+C 是唯一在 2006 年以后（含 QDII 真实成本）三条标准都过的规则，但证据弱：1986–2005 年比一直持有差，2006 年以后的优势几乎全来自 2008 年。</div><div id="cr-c"></div>` : '<div class="nodata">暂无数据</div>', '', 'full')}
-      ${panel('', '信用利差一览', '单位 bp；走阔（变大）标红', `<table class="tbl-compact"><thead><tr><th>利差</th><th>最新</th><th>1 周</th><th>1 月</th><th>3 月</th><th>数据起点</th></tr></thead><tbody>${ids.map(row).join('')}</tbody></table>
-        <div class="hint">HY、IG、CCC、BB 来自 ICE（FRED），FRED 现在只给最近 3 年；长历史只能看 BAA10Y。现有门槛：HY 警戒 ${T.hy_line}bp（你的先行条件①），HY 1 月走阔 ${T.hy_speed_y}/${T.hy_speed_r}bp（${HEUR}）。</div>`)}
+    const tip = `<b>信用利差</b>：公司借钱比美国国债每年多付的利息。越大 = 借钱越难、越贵。<br>· 高收益债（HY）：评级较低的公司，最敏感。<br>· CCC 级：最弱的一层，常常最先出问题。<br>· 投资级（IG）：大公司，它也变大说明压力扩散到了好公司。<br>· Baa − 10 年美债：穆迪 Baa 级公司债，有 1986 年以来的长历史（ICE 的数据免费只给 3 年）。<br><br>看<b>速度</b>比看高低更重要：几周内快速变大才是警报。`;
+    app.innerHTML = `<div class="pg-h"><h1>信用</h1><span class="s">企业借钱的额外成本（信用利差）</span>${U.info(tip)}</div><div class="mk-grid">
+      ${panel('', '信用利差一览', '单位 bp（基点，1bp = 0.01 个百分点）；变大标红', `<table class="tbl-compact"><thead><tr><th>利差</th><th>最新</th><th>1 周</th><th>1 月</th><th>3 月</th><th>数据起点</th></tr></thead><tbody>${ids.map(row).join('')}</tbody></table>
+        <div class="hint">首页“信用”卡片的颜色：高收益债利差高于 ${T.hy_line}bp、或 1 个月上升超过 ${T.hy_speed_y}bp 为“偏紧”，高于 ${T.hy_red}bp 或 1 个月上升超过 ${T.hy_speed_r}bp 为“警报”；CCC 1 个月上升超过 ${T.ccc_speed_y}/${T.ccc_speed_r}bp 也算。速度门槛是经验值，还没用数据检验。</div>`)}
       ${panel('', '分层利差走势', '2023 年起', '<div id="cr-oas"></div>')}
-      ${panel('', '高收益 ÷ 投资级（HYG÷LQD）', '下降 = 风险偏好收缩', '<div id="cr-r"></div>')}
-      ${panel('', 'BAA10Y 水平', '1986 年起', '<div id="cr-l"></div>')}
+      ${panel('', '长历史：Baa − 10 年美债 3 个月变化', '黄色底 = 3 个月内上升超过 0.5 个百分点（50bp）的时期', CR ? `<div class="kv"><span class="big ${CR.now > 0 ? 'neg' : 'pos'}">${U.sgn(CR.now, 0, 'bp')}</span><span>3 个月变化，现在：<b>${CR.state === 'off' ? '快速变紧中' : '没有快速变紧'}</b></span><span>上次切换 <b>${CR.since}</b></span><span>水平 <b>${CR.level.toFixed(0)}bp</b></span>${U.info(`我们用 1986 年以来的数据检验过“3 个月上升超过 50bp 就减仓、回到不上升再买回”：只在 2006 年以后比一直持有好，而且优势几乎全来自 2008 年一次；1986–2005 年反而更差，2020 和 2022 年都没帮上忙。所以证据偏弱，这里只当背景参考。详细过程见 Quant Learning。`, 'ⓘ 历史检验')}</div><div id="cr-c"></div>` : '<div class="nodata">暂无数据</div>', '', 'full')}
+      ${panel('', '高收益 ÷ 投资级债 ETF（HYG÷LQD）', '下降 = 大家不愿意冒信用风险', '<div id="cr-r"></div>')}
+      ${panel('', 'Baa − 10 年美债 水平', '1986 年起', '<div id="cr-l"></div>')}
     </div>`;
     if (CR){
       const x = CR.s.d.map(U.ts);
-      Charts.line(U.$('#cr-c'), { x, ys: [CR.ch], labels: ['63 日变化'], range: '10Y', height: 230, xbands: CR.bands, hlines: [{ y:Home.C3.off, label:`+${Home.C3.off}bp 离场线` }, { y:0, label:'0 回来线', color:U.css('--g') }], fmt: v => v == null ? '—' : U.sgn(v, 0, 'bp') });
-      Charts.line(U.$('#cr-l'), { x, ys: [CR.s.v], labels: ['BAA10Y'], range: 'ALL', height: 200, xbands: CR.bands, fmt: v => v == null ? '—' : v.toFixed(0) + 'bp' });
+      Charts.line(U.$('#cr-c'), { x, ys: [CR.ch], labels: ['3 个月变化'], range: '10Y', height: 230, xbands: CR.bands, hlines: [{ y:Home.C3.off, label:`+${Home.C3.off}bp` }, { y:0, label:'0', color:U.css('--g') }], fmt: v => v == null ? '—' : U.sgn(v, 0, 'bp') });
+      Charts.line(U.$('#cr-l'), { x, ys: [CR.s.v], labels: ['Baa − 10 年美债'], range: 'ALL', height: 200, xbands: CR.bands, fmt: v => v == null ? '—' : v.toFixed(0) + 'bp' });
     }
     const hy = U.ser('HY_OAS');
     if (hy){ const al = id => { const s = U.ser(id); if (!s) return hy.d.map(() => null); const m = new Map(s.d.map((d, i) => [d, s.v[i]])); return hy.d.map(d => m.get(d) ?? null); };
@@ -37,8 +37,8 @@ const Pages2 = (() => {
   function val(app){
     const S = window.SP;
     const sigma = `<div class="nodata" style="text-align:left;padding:12px">数据暂不可得：纳指 100 / 标普 500 市盈率的长期历史（算 1–20 年均值和 ±1σ/2σ 要 20 年以上的月度数据）没有免费、合规的来源。
-      Shiller 教授公开的标普周期调整市盈率只更新到 2024 年 6 月；用现在的成分股和 SEC 财报往回拼会有幸存者偏差，而且 SEC 结构化财报 2009 年才开始。所以不做 σ 表，下面只给“今天”的横截面。</div>`;
-    if (!S){ app.innerHTML = panel('', 'VAL 估值', '', sigma + noSP); return; }
+      Shiller 教授公开的标普周期调整市盈率只更新到 2024 年 6 月；用现在的成分股和 SEC 财报往回拼会有幸存者偏差，而且 SEC 结构化财报 2009 年才开始。所以不做“历史均值 ± 标准差”表，下面只给“今天”的横截面。</div>`;
+    if (!S){ app.innerHTML = panel('', '估值', '', sigma + noSP); return; }
     const secs = [...new Set(S.rows.map(r => r.sec))];
     const agg = rows => { const ok = rows.filter(r => r.mcap && !r.dup); const sm = ok.reduce((a, r) => a + r.mcap, 0);
       const e = ok.filter(r => r.pe != null || r.nm != null); // 有净利润数据的
@@ -47,7 +47,7 @@ const Pages2 = (() => {
       return { n: rows.length, mcap: sm, pe: ni ? ok.filter(r => r.pe).reduce((a, r) => a + r.mcap, 0) / ni : null, fpe: med(rows.map(r => r.fpe)), pem: med(rows.map(r => r.pe)), ps: rev ? mcRev / rev : null, pb: med(rows.map(r => r.pb)), g: med(rows.map(r => r.g)) }; };
     const all = agg(S.rows), tr = (n, a, cls='') => `<tr class="${cls}"><td>${n}</td><td>${a.n}</td><td>${fcap(a.mcap)}</td><td>${fx(a.pe)}</td><td>${fx(a.pem)}</td><td>${fx(a.fpe)}</td><td>${fx(a.ps, 2)}</td><td>${fx(a.pb, 2)}</td><td>${fpct(a.g)}</td></tr>`;
     app.innerHTML = `<div class="mk-grid">
-      ${panel('', '估值 σ 表', '历史均值 ±1σ / 2σ（1–20 年窗口）', sigma, '<span class="badge n">数据暂不可得</span>', 'full')}
+      ${panel('', '估值和历史比', '历史均值 ± 1 / 2 个标准差（1–20 年窗口）', sigma, '<span class="badge n">数据暂不可得</span>', 'full')}
       ${panel('', '今天的估值横截面', `标普 500 成分股，按 GICS 行业，截至 ${S.asof}（同一公司的两类股票只算一次）`, `<table class="tbl-compact"><thead><tr><th>行业</th><th>公司数</th><th>合计市值（美元）</th><th>合计市盈率</th><th>市盈率中位数</th><th>前瞻市盈率中位数</th><th>合计市销率</th><th>市净率中位数</th><th>隐含增长中位数</th></tr></thead><tbody>
         ${tr('标普 500 全部', all, 'base')}${secs.map(s => [s, agg(S.rows.filter(r => r.sec === s))]).sort((a, b) => b[1].mcap - a[1].mcap).map(([s, a]) => tr(s, a)).join('')}</tbody></table>
         <div class="hint">合计市盈率 = 合计市值 ÷ 合计净利润（只算净利润为正的公司）。${S.notes.fund} ${S.notes.pe} 这些数是“今天一个时点”，不能说明现在比历史贵还是便宜。</div>`, '', 'full')}
@@ -70,9 +70,9 @@ const Pages2 = (() => {
     return out;
   }
   function hm(app){
-    const S = window.SP; if (!S){ app.innerHTML = panel('', 'HM 热力图', '', noSP); return; }
+    const S = window.SP; if (!S){ app.innerHTML = panel('', '热力图', '', noSP); return; }
     let k = 'd1';
-    app.innerHTML = panel('', '标普 500 热力图', `方块大小 = 市值，颜色 = 涨跌；截至 ${S.asof}`, `<div class="selrow">${[['d1', '1 日', .03], ['w1', '1 周', .06], ['m1', '1 月', .1], ['ytd', '今年', .3]].map(([kk, n]) => `<button class="btn small ${kk === k ? 'primary' : ''}" data-k="${kk}">${n}</button>`).join('')}<span class="hint">悬停看数，点方块去 RV 同业比较。</span></div><canvas id="hm-c" style="width:100%;display:block;margin-top:6px"></canvas><div class="hint">${S.notes.src}。没有市值或价格的公司不画；同一家公司的第二类股票（如 GOOG、FOX、NWS）不重复画。</div>`);
+    app.innerHTML = panel('', '标普 500 热力图', `方块大小 = 市值，颜色 = 涨跌；截至 ${S.asof}`, `<div class="selrow">${[['d1', '1 日', .03], ['w1', '1 周', .06], ['m1', '1 月', .1], ['ytd', '今年', .3]].map(([kk, n]) => `<button class="btn small ${kk === k ? 'primary' : ''}" data-k="${kk}">${n}</button>`).join('')}<span class="hint">悬停看数，点方块去“同业比较”。</span></div><canvas id="hm-c" style="width:100%;display:block;margin-top:6px"></canvas><div class="hint">${S.notes.src}。没有市值或价格的公司不画；同一家公司的第二类股票（如 GOOG、FOX、NWS）不重复画。</div>`);
     const cv = U.$('#hm-c'); let rects = [], hover = null;
     const scaleOf = { d1: .03, w1: .06, m1: .1, ytd: .3 };
     function draw(){
@@ -113,7 +113,7 @@ const Pages2 = (() => {
 
   // ---------- BR 广度 ----------
   function br(app){
-    const S = window.SP; if (!S || !S.breadth.d.length){ app.innerHTML = panel('', 'BR 广度', '', noSP); return; }
+    const S = window.SP; if (!S || !S.breadth.d.length){ app.innerHTML = panel('', '广度', '', noSP); return; }
     const B = S.breadth, n = B.d.length - 1;
     const secs = Object.entries(S.rows.reduce((a, r) => { (a[r.sec] = a[r.sec] || []).push(r); return a; }, {}));
     const pc = (rs, f) => { const ok = rs.filter(r => r[f] != null); return ok.length ? ok.filter(r => r[f]).length / ok.length : null; };
@@ -128,7 +128,7 @@ const Pages2 = (() => {
 
   // ---------- RV 同业比较 ----------
   function rv(app, t0){
-    const S = window.SP; if (!S){ app.innerHTML = panel('', 'RV 同业比较', '', noSP); return; }
+    const S = window.SP; if (!S){ app.innerHTML = panel('', '同业比较', '', noSP); return; }
     const by = Object.fromEntries(S.rows.map(r => [r.t, r]));
     app.innerHTML = panel('', '同业比较', `同一 GICS 子行业的标普 500 公司；财报来自 SEC，价格截至 ${S.asof}`,
       `<div class="selrow"><input id="rv-t" list="rv-l" value="${U.esc(t0 || U.store.get('ms_rv', 'AAPL'))}" size="8" aria-label="股票代码"><datalist id="rv-l">${S.rows.map(r => `<option value="${r.t}">${U.esc(r.n)}</option>`).join('')}</datalist>

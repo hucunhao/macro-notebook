@@ -11,13 +11,20 @@
     const h = location.hash.replace(/^#\/?/, '') || 'observe';
     let [r, a] = h.split('/');
     if (r === 'markets') r = 'mkt'; if (r === 'lrn') r = 'learn';
-    if (!['learn','notes','sources','mkt','fi','cr','gp','val','hm','br','rv','all'].includes(r)) r = 'observe';
+    if (!['learn','notes','sources','mkt','world','fi','cr','cmd','cal','ern','qdii','seas','gp','val','hm','br','rv','all'].includes(r)) r = 'observe';
     U.$$('#nav a').forEach(x => x.classList.toggle('on', x.dataset.r === r));
+    U.$('#nav-more>button').classList.toggle('on', !!U.$(`#nav-more a[data-r="${r}"]`)); U.$('#nav-more').classList.remove('open');
     app.innerHTML = '';
     app.classList.toggle('wide', !['learn','notes','sources'].includes(r));
     window.scrollTo(0, 0);
     try {
-      if (r === 'learn') Learn.render(app, a);
+      if (r === 'learn') app.innerHTML = `<div class="card" style="max-width:640px;margin:40px auto"><h1>学习内容搬家了</h1><p>第 1–3 周的课程和以后的新内容，都放到了单独的学习网站：</p><p><a class="btn primary" href="https://hucunhao.github.io/quant-learning/" target="_blank" rel="noopener">打开 Quant Learning ↗</a></p><p class="muted small">这个网站（Market Dashboard）只保留每天看盘用的面板。</p></div>`;
+      else if (r === 'world') Pages3.world(app);
+      else if (r === 'cmd') Pages3.cmdty(app);
+      else if (r === 'cal') Pages3.cal(app);
+      else if (r === 'ern') Pages3.ern(app);
+      else if (r === 'qdii') Pages3.qdii(app);
+      else if (r === 'seas') Pages3.seas(app);
       else if (r === 'notes') Notes.render(app);
       else if (r === 'sources') Sources.render(app);
       else if (r === 'mkt') Markets.mkt(app);
@@ -44,12 +51,15 @@
   // 门槛改动后：观察页立即重算（保持滚动位置）
   Settings.onChange(() => { const h = location.hash; if (!h || h === '#' || h.startsWith('#/observe') || h.startsWith('#/all')) { const y = scrollY; route(); scrollTo(0, y); } });
   // 跳转菜单：按 / 打开，输入筛选，回车跳转
-  const CMDS = [['HOME','总览','#/observe'],['MKT','市场：行情、行业、涨跌榜','#/mkt'],['FI','债券：收益率曲线','#/fi'],['CR','信用：利差和 C 规则','#/cr'],['GP','技术：相对强弱、均线、MACD','#/gp'],['VAL','估值','#/val'],['HM','热力图','#/hm'],['BR','广度','#/br'],['RV','同业比较','#/rv'],
-    ['LRN','学习：第 1 周 回撤和分档','#/learn/1'],['LRN2','学习：第 2 周 信用利差 z 分数','#/learn/2'],['LRN3','学习：第 3 周 信用和 VIX 规则检验','#/learn/3'],['ALL','全部指标（原观察页）','#/all'],['NOTE','笔记','#/notes'],['SRC','数据来源','#/sources'],['SET','门槛设置',null]];
+  const CMDS = [['HOME','总览','#/observe'],['US','美股：行情、行业、涨跌榜','#/mkt'],['WEI','全球股市：美欧日港 A 股','#/world'],['HM','热力图：标普 500 每只股票','#/hm'],
+    ['GC','利率曲线：各期限美债收益率、倒挂历史','#/fi'],['CR','信用：企业借钱的额外成本','#/cr'],['CMD','商品和汇率：黄金、原油、美元、人民币','#/cmd'],
+    ['ECO','经济日历：CPI、非农、美联储会议','#/cal'],['ERN','财报日历：大公司哪天发财报','#/ern'],['QDII','QDII 溢价：纳指和标普场内基金','#/qdii'],['SEAS','季节性：每个月历史上涨跌','#/seas'],
+    ['GP','技术和相对强弱：均线、MACD','#/gp'],['VAL','估值：各行业市盈率','#/val'],['BR','广度：多少股票站上均线','#/br'],['RV','同业比较：一家公司和同行','#/rv'],
+    ['ALL','全部指标','#/all'],['NOTE','笔记','#/notes'],['SRC','数据来源','#/sources'],['SET','门槛设置',null]];
   function openCmd(){
     if (U.$('.cmd')) return;
     const m = document.createElement('div'); m.className = 'cmd';
-    m.innerHTML = `<div class="box"><input placeholder="输入功能代码（如 FI、HM）或中文名，回车跳转；Esc 关闭" aria-label="跳转到"><div class="list"></div></div>`;
+    m.innerHTML = `<div class="box"><input placeholder="输入中文名或缩写（如 日历、QDII），回车跳转；Esc 关闭" aria-label="跳转到"><div class="list"></div></div>`;
     document.body.appendChild(m);
     const inp = U.$('input', m), list = U.$('.list', m); let sel = 0, cur = CMDS;
     const go = c => { m.remove(); if (c[2]) location.hash = c[2]; else Settings.open(); };
@@ -61,6 +71,11 @@
     paint(); inp.focus();
   }
   U.$('#btn-cmd').onclick = openCmd;
+  // 导航“更多”下拉
+  const more = U.$('#nav-more'), mb = U.$('button', more), menu = U.$('.menu', more);
+  mb.onclick = e => { e.stopPropagation(); more.classList.toggle('open'); const r = mb.getBoundingClientRect(); menu.style.left = Math.min(r.left, innerWidth - 170) + 'px'; menu.style.top = (r.bottom + 4) + 'px'; };
+  document.addEventListener('click', e => { if (!more.contains(e.target)) more.classList.remove('open'); });
+  U.initTips();
   document.addEventListener('keydown', e => { if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){ e.preventDefault(); openCmd(); } });
   route();
 })();

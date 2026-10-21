@@ -20,7 +20,7 @@ const Observe = (() => {
     let lc = 'n';
     if (hy != null){
       const lv = hy > T.hy_red ? 'r' : hy > T.hy_line ? 'y' : 'g';
-      add('信用', lv, `HY 利差 ${hy.toFixed(0)}bp（${lastd('HY_OAS')}）：${lv==='r' ? `高于红线 ${T.hy_red}bp` : lv==='y' ? `高于 ${T.hy_line}bp（和先行条件①同一条线）` : `低于 ${T.hy_line}bp（和先行条件①同一条线）`}。红线 ${T.hy_red}bp 是临时经验值`, false);
+      add('信用', lv, `HY 利差 ${hy.toFixed(0)}bp（${lastd('HY_OAS')}）：${lv==='r' ? `高于红线 ${T.hy_red}bp` : lv==='y' ? `高于 ${T.hy_line}bp` : `低于 ${T.hy_line}bp`}。红线 ${T.hy_red}bp 是临时经验值`, false);
       const sp = hy1m >= T.hy_speed_r ? 'r' : hy1m >= T.hy_speed_y ? 'y' : 'g';
       add('信用', sp, `HY 利差 1 个月变化 ${U.sgn(hy1m,0,'bp')}：${sp==='g' ? `没超过 +${T.hy_speed_y}bp` : `超过 +${sp==='r'?T.hy_speed_r:T.hy_speed_y}bp，在快速走阔`}`);
       lc = U.worst(lv, sp);
@@ -56,14 +56,14 @@ const Observe = (() => {
     const greed = (vix != null && vix < T.vix_calm) && (fg != null && fg > T.fg_greed);
     let stage, one, overall;
     if (R.credit === 'r'){ overall = 'r'; stage = '信用断裂'; one = 'VIX、情绪、广度这些“抄底信号”此时是陷阱，先看信用什么时候止血。'; }
-    else if (R.credit === 'y'){ overall = 'y'; stage = '信用松动'; one = '利差在走阔（尤其最弱的一层），逆向信号要打折扣，等信用企稳再相信它们。' + (R.rates !== 'g' ? '同时利率偏高，估值也在受压。' : ''); }
-    else if (R.credit === 'g' && fear){ overall = 'g'; stage = '信用平静中的恐慌'; one = '信用没出问题，情绪却很怕。按你的框架，这是逆向信号可信的时候。'; }
+    else if (R.credit === 'y'){ overall = 'y'; stage = '信用松动'; one = '利差在走阔（尤其最弱的一层），情绪恐慌时更要小心，等信用企稳再看。' + (R.rates !== 'g' ? '同时利率偏高，估值也在受压。' : ''); }
+    else if (R.credit === 'g' && fear){ overall = 'g'; stage = '信用平静中的恐慌'; one = '信用没出问题，情绪却很怕。单靠情绪判断买点的证据偏弱，按加仓线执行即可。'; }
     else if (R.credit === 'g' && R.rates !== 'g'){ overall = 'y'; stage = '利率压估值'; one = '信用平静，但利率高于参考线，压的是估值倍数，长久期和小盘更受伤。'; }
     else if (R.credit === 'g' && greed){ overall = 'y'; stage = '平静但自满'; one = '信用平静、市场乐观，赔率在变差，不适合追高。'; }
     else if (R.credit === 'g'){ overall = 'g'; stage = '平稳'; one = '信用平静，其他信号也没有极端。'; }
     else { overall = 'n'; stage = '数据不足'; one = '缺少信用数据，无法判断总开关。'; }
     const diagTxt = diag.rows[2] ? '跨资产：黄金和收益率同涨，最接近危险，盯紧信用。' : diag.rows[1] ? '跨资产：美元大涨同时股票下跌，像全球流动性收缩。' : diag.rows[0] ? '跨资产：收益率升、股票跌，属于纯杀估值，可逆。' : '跨资产：过去 1 个月没有对上诊断表里的任何一种病因。';
-    // 先行条件
+    // 放慢加仓的 4 条预警
     const igv = lastv('IG_OAS');
     const t1 = hy != null && ig3m != null ? { live: hy > T.hy_line && ig3m > T.ig_widen, text: `HY OAS ${hy.toFixed(0)}bp（${lastd('HY_OAS')}，要 >${T.hy_line}bp）；IG OAS 63 个交易日变化 ${U.sgn(ig3m,0,'bp')}（${U.ser('IG_OAS').d[U.ser('IG_OAS').d.length-64]} → ${lastd('IG_OAS')}，要 >+${T.ig_widen}bp）` } : { live: null, text: '暂无数据' };
     const fs = U.ser('FEDU'), cs = U.ser('CORECPI_YOY');
@@ -136,7 +136,7 @@ const Observe = (() => {
     { id:'GLD', kind:'pct', nd:2, tv:'TVC:GOLD', read:'与收益率同涨 = 贬值 / 信用担忧的“病因”线索。',
       rule: (s, T) => { const dg = s.last/s.prev21 - 1, dy = chg('UST10', 21, 'abs'); return (dg > T.diag_gold/100 && dy > T.diag_yield) ? ['r', '黄金和收益率同涨'] : ['g', `1 个月 ${U.pct(dg)}，收益率 1 个月 ${U.sgn(dy,2,' 个百分点')}，不是同涨`]; } },
     { manual:'gold_spot' },
-    { id:'REAL10', kind:'pp', nd:2, upBad:true, tv:'FRED:DFII10', read:'实际利率越高，持有不生息的黄金越“亏机会成本”，通常压金价。（这条是工程师补的说明）' },
+    { id:'REAL10', kind:'pp', nd:2, upBad:true, tv:'FRED:DFII10', read:'实际利率越高，持有不生息的黄金越“亏机会成本”，通常压金价。' },
   ];
   B.rates = [
     { id:'UST10', kind:'pp', nd:2, upBad:true, tv:'TVC:US10Y', hl: T => [{ y:T.r10_line, label:`参考线 ${T.r10_line}%`, include:true }],
@@ -144,12 +144,12 @@ const Observe = (() => {
       rule: (s, T) => s.last > T.r10_red ? ['r', `高于红线 ${T.r10_red}%`] : s.last > T.r10_line ? ['y', `高于参考线 ${T.r10_line}%`] : ['g', `低于参考线 ${T.r10_line}%`] },
     { id:'UST2', kind:'pp', nd:2, upBad:true, tv:'TVC:US02Y', read:'更贴近政策预期；与 10Y 之差看曲线形态。' },
     { id:'UST30', kind:'pp', nd:2, upBad:true, tv:'TVC:US30Y', read:'对财政 / 期限溢价最敏感；长端飙升 = 财政担忧而非增长。' },
-    { id:'T10Y2Y', kind:'pp', nd:2, tv:'FRED:T10Y2Y', hl: () => [{ y:0, label:'0（倒挂线）' }], read:'10 年减 2 年。小于 0 叫“倒挂”，历史上常出现在衰退之前。（工程师补充）',
+    { id:'T10Y2Y', kind:'pp', nd:2, tv:'FRED:T10Y2Y', hl: () => [{ y:0, label:'0（倒挂线）' }], read:'10 年减 2 年。小于 0 叫“倒挂”，历史上常出现在衰退之前。',
       rule: s => s.last < 0 ? ['y', '倒挂中'] : ['g', '没有倒挂'] },
-    { id:'UST3MO', kind:'pp', nd:2, tv:'TVC:US03MY', read:'基本跟着联储政策利率走。（工程师补充）' },
-    { id:'BE10', kind:'pp', nd:2, upBad:true, tv:'FRED:T10YIE', read:'市场预期的未来 10 年平均通胀 = 名义利率 − 实际利率。（工程师补充）' },
-    { id:'FEDU', kind:'pp', nd:2, tv:'FRED:DFEDTARU', range:'5Y', read:'联储政策利率区间的上限。（工程师补充）' },
-    { id:'CORECPI_YOY', kind:'pp', nd:2, upBad:true, tv:'FRED:CPILFESL', range:'5Y', read:'扣掉食品和能源的通胀，同比。月度数据。（工程师补充）' },
+    { id:'UST3MO', kind:'pp', nd:2, tv:'TVC:US03MY', read:'基本跟着联储政策利率走。' },
+    { id:'BE10', kind:'pp', nd:2, upBad:true, tv:'FRED:T10YIE', read:'市场预期的未来 10 年平均通胀 = 名义利率 − 实际利率。' },
+    { id:'FEDU', kind:'pp', nd:2, tv:'FRED:DFEDTARU', range:'5Y', read:'联储政策利率区间的上限。' },
+    { id:'CORECPI_YOY', kind:'pp', nd:2, upBad:true, tv:'FRED:CPILFESL', range:'5Y', read:'扣掉食品和能源的通胀，同比。月度数据。' },
   ];
   B.equity = [
     { id:'SPX', kind:'pct', nd:2, tv:'SP:SPX', read:'大盘基准；长期看盈利、靠成分股新陈代谢修复。' },
@@ -157,7 +157,7 @@ const Observe = (() => {
     { id:'RSP_SPY', kind:'pct', nd:4, tv:'AMEX:RSP/AMEX:SPY', read:'等权 ÷ 市值加权。下行 = 只靠巨头死撑；上行 = 雨露均沾。',
       rule: (s, T) => { const c = s.last/s.prev63 - 1; return c < -T.rsp_drop/100 ? ['y', `3 个月 ${U.pct(c)}，涨势变窄`] : ['g', `3 个月 ${U.pct(c)}`]; } },
     { id:'IWM', kind:'pct', nd:2, tv:'AMEX:IWM', read:'小盘相对强弱 = 风险偏好；它本身就是“那段信用”。' },
-    { id:'IWM_SPY', kind:'pct', nd:4, tv:'AMEX:IWM/AMEX:SPY', read:'小盘 ÷ 大盘。高利率对小盘伤害最大。（工程师补充）',
+    { id:'IWM_SPY', kind:'pct', nd:4, tv:'AMEX:IWM/AMEX:SPY', read:'小盘 ÷ 大盘。高利率对小盘伤害最大。',
       rule: (s, T) => (s.pos*100 < T.iwm_pos) ? ['y', `处在一年区间 ${(s.pos*100).toFixed(0)}% 位置，接近最弱`] : ['g', `处在一年区间 ${(s.pos*100).toFixed(0)}% 位置`] },
     { nodata:true, name:'S5TH · 标普成分股站上 200 日线的比例', reason:'没有找到能免费下载历史的公开来源（只在 TradingView 上有）。', tv:'INDEX:S5TH', read:'&gt;70% 过热易回调；极低 washout 后常见大底。' },
     { nodata:true, name:'S5FI · 站上 50 日线的比例', reason:'同上，只在 TradingView 上有。', tv:'INDEX:S5FI', read:'中期广度，比 200 日更快反应。' },
@@ -171,13 +171,13 @@ const Observe = (() => {
     { id:'USD_BROAD', kind:'pct', nd:2, tv:'FRED:DTWEXBGS', read:'美元暴涨 + 股跌 = 全球流动性收缩。（这里用美联储的广义美元指数，覆盖面比 DXY 更广）',
       rule: (s, T) => { const c = s.last/s.prev21 - 1; return c > T.diag_usd/100 ? ['y', `1 个月 ${U.pct(c)}，美元大涨`] : ['g', `1 个月 ${U.pct(c)}`]; } },
     { manual:'dxy' },
-    { id:'WTI', kind:'pct', nd:2, tv:'TVC:USOIL', read:'油价推高通胀，通胀让利率降不下来。（工程师补充）' },
-    { id:'WTI_YOY', kind:'pp', nd:1, trig:true, tv:'TVC:USOIL', hl: T => [{ y:T.oil_yoy, label:`${T.oil_yoy}%` }], read:'原油日度同比。你的先行条件 ③ 用的是月均价同比，要最近 2 个完整月份都超过，并且最近 20 个交易日创 52 周收盘新高。',
-      rule: (s, T) => s.last > T.oil_yoy ? ['y', `日度同比超过 ${T.oil_yoy}%（先行条件③看的是月均价，见上方）`] : ['g', `日度同比没超过 ${T.oil_yoy}%`] },
+    { id:'WTI', kind:'pct', nd:2, tv:'TVC:USOIL', read:'油价推高通胀，通胀让利率降不下来。' },
+    { id:'WTI_YOY', kind:'pp', nd:1, trig:true, tv:'TVC:USOIL', hl: T => [{ y:T.oil_yoy, label:`${T.oil_yoy}%` }], read:'原油日度同比。放慢加仓的预警 ③ 用的是月均价同比：最近 2 个完整月份都要超过，并且最近 20 个交易日创 52 周收盘新高。',
+      rule: (s, T) => s.last > T.oil_yoy ? ['y', `日度同比超过 ${T.oil_yoy}%（预警 ③ 看的是月均价，见上方）`] : ['g', `日度同比没超过 ${T.oil_yoy}%`] },
     { id:'BRENT', kind:'pct', nd:2, tv:'TVC:UKOIL', read:'全球油价基准。' },
-    { id:'USDCNY', kind:'pct', nd:4, tv:'FX_IDC:USDCNY', read:'人民币汇率。你的 QDII 基金净值会受它影响：美元涨，人民币计的净值也跟着涨。（工程师补充）' },
+    { id:'USDCNY', kind:'pct', nd:4, tv:'FX_IDC:USDCNY', read:'人民币汇率。你的 QDII 基金净值会受它影响：美元涨，人民币计的净值也跟着涨。' },
     { id:'EURUSD', kind:'pct', nd:4, tv:'FX:EURUSD', read:'欧元兑美元。' },
-    { id:'EEM', kind:'pct', nd:2, tv:'AMEX:EEM', read:'新兴市场。美元强、全球流动性紧时通常先受伤。（工程师补充）' },
+    { id:'EEM', kind:'pct', nd:2, tv:'AMEX:EEM', read:'新兴市场。美元强、全球流动性紧时通常先受伤。' },
     { id:'FXI', kind:'pct', nd:2, tv:'AMEX:FXI', read:'中国大盘股。' },
     { id:'VGK', kind:'pct', nd:2, tv:'AMEX:VGK', read:'欧洲股票。' },
   ];
@@ -221,7 +221,7 @@ const Observe = (() => {
       <div class="chg"><span>1 周 <b class="${chgCls(st.last, st.prev5, cfg)}">${fmtChg(st.last, st.prev5, cfg)}</b></span><span>1 月 <b class="${chgCls(st.last, st.prev21, cfg)}">${fmtChg(st.last, st.prev21, cfg)}</b></span><span>3 月 <b class="${chgCls(st.last, st.prev63, cfg)}">${fmtChg(st.last, st.prev63, cfg)}</b></span></div>
       ${st.pos != null ? `<div class="rangebar" title="在过去一年最低到最高之间的位置"><i style="left:calc(${(st.pos*100).toFixed(1)}% - 1px)"></i></div>
       <div class="rangelbl"><span>一年最低 ${fmtVal(st.lo, cfg)}</span><span>位置 ${(st.pos*100).toFixed(0)}%</span><span>一年最高 ${fmtVal(st.hi, cfg)}</span></div>` : ''}
-      ${rule ? `<div class="rule"><span class="light ${rule[0]}"></span><span>${rule[1]}${cfg.trig ? '<span class="muted small">（你的先行条件）</span>' : `<br><span class="muted small">门槛：${HEUR}</span>`}</span></div>` : ''}
+      ${rule ? `<div class="rule"><span class="light ${rule[0]}"></span><span>${rule[1]}${cfg.trig ? '<span class="muted small">（放慢加仓的预警之一）</span>' : `<br><span class="muted small">门槛：${HEUR}</span>`}</span></div>` : ''}
       <div class="chartbox"></div>
       <div class="read">${cfg.read}${cfg.readNote ? `<br><span class="muted small">${cfg.readNote}</span>` : ''}</div>
       ${short ? `<div class="note">注意：${short}</div>` : ''}
@@ -276,7 +276,7 @@ const Observe = (() => {
     const top = document.createElement('div');
     top.innerHTML = `
       <h1>全部指标</h1>
-      <p class="muted small">这是第二层：原来观察页的全部内容。每天先看“总览”的 3 个核心，想深入再来这里。数据截至美股 ${MS.meta.newest} 收盘（数据生成于 ${MS.meta.generated} 台北时间）。</p>
+      <p class="muted small">这里是所有指标的完整版。每天先看“总览”，想深入再来这里。数据截至美股 ${MS.meta.newest} 收盘（数据生成于 ${MS.meta.generated} 台北时间）。</p>
       <div class="card verdict ${C.overall}" id="verdict">
         <div class="muted small">市场阶段</div>
         <div class="stage"><span class="light ${C.overall}"></span>${C.stage}</div>
@@ -285,25 +285,25 @@ const Observe = (() => {
         <div class="lights">${lights.map(([n, l]) => `<span><span class="light ${l}"></span>${n}：${U.lightName(l)}</span>`).join('')}</div>
         <details><summary>为什么这样判断（每条规则和它的结果）</summary>
           <ul class="rules">${C.rules.map(r => `<li><span class="light ${r.l}"></span><span><b>${r.area}</b>　${r.text}${r.heur ? `　<span class="tag warn">${HEUR}</span>` : ''}</span></li>`).join('')}</ul>
-          <p class="small"><span class="tag warn">${HEUR}</span> 这些门槛是工程师先定的经验值（包括 10 年美债 4.75% / 5.25%、VIX 30 / 15、HY 走阔速度、CCC 走阔速度、广度门槛），第 3 周起逐个用历史数据检验。HY 350bp 来自你的先行条件①。</p>
+          <p class="small"><span class="tag warn">${HEUR}</span> 这些门槛是先定的经验值（包括 10 年美债 4.75% / 5.25%、VIX 30 / 15、HY 走阔速度、CCC 走阔速度、广度门槛），还没有逐个用历史数据检验。HY 350bp 来自你的预警条件 ①。</p>
           <p class="small muted">判断顺序：信用红灯 → “信用断裂”；信用黄灯 → “信用松动”；信用绿灯时，若 VIX 高于恐慌线或恐惧贪婪低于极度恐惧线 → “信用平静中的恐慌”；否则利率高于参考线 → “利率压估值”；VIX 低于自满线且恐惧贪婪高于极度贪婪线 → “平静但自满”；都没有 → “平稳”。所有门槛都能在右上角“门槛设置”里改。</p>
         </details>
       </div>
       <div class="grid g2" style="margin-top:14px">
-        <div class="card"><h3 style="margin-top:0">你的 4 个先行条件 <span class="tag ${C.nLive>=2?'r':C.nLive?'y':'g'}">${C.nLive} / 4 成立</span></h3>
-          ${['① 信用：HY OAS > 350bp，且 IG OAS 63 个交易日走阔 > 20bp', '② 联储处在加息周期，且核心 CPI 同比比 3 个月前高至少 0.1 个百分点', '③ 原油月均价连续 2 个月同比 > 50%，且最近 20 个交易日创 52 周收盘新高', '④ AI 信用压力在扩散'].map((t, i) => { const x = C.trig[i]; const l = x.live == null ? 'n' : x.live ? 'r' : 'g';
+        <div class="card"><h3 style="margin-top:0">放慢加仓的 4 条预警 <span class="tag ${C.nLive>=2?'r':C.nLive?'y':'g'}">${C.nLive} / 4 成立</span></h3>
+          ${[...Home.WARN_NAMES].map((t, i) => { const x = C.trig[i]; const l = x.live == null ? 'n' : x.live ? 'r' : 'g';
             return `<div class="trig"><span class="light ${l}"></span><div><b>${t}</b>　${x.live == null ? '暂无数据' : x.live ? '成立' : '不成立'}${x.manual ? ' <span class="tag">手动</span>' : ''}<br><span class="small muted">${x.text}</span></div></div>`; }).join('')}
           <p class="small" style="margin-bottom:0">${C.nLive >= 2 ? '<b>已有 2 条或以上成立</b>：按你的规则，每一档加仓拆成两半，间隔 4 周买入。' : '成立的不到 2 条：按你的规则，触发某一档时一次买完这一档。'}</p>
         </div>
-        <div class="card"><h3 style="margin-top:0">你的分档加仓：现在离触发还有多远</h3>
-          ${C.nLive >= 2 ? `<div class="split-alert">先行条件已有 ${C.nLive} 条成立：<b>加仓每档拆成两半，间隔 4 周</b></div>` : `<div class="split-note">先行条件成立 ${C.nLive} 条（不到 2 条）：触发某一档时一次买完这一档。</div>`}
+        <div class="card"><h3 style="margin-top:0">你的加仓线：现在离触发还有多远</h3>
+          ${C.nLive >= 2 ? `<div class="split-alert">预警已有 ${C.nLive} 条成立：<b>加仓每档拆成两半，间隔 4 周</b></div>` : `<div class="split-note">预警成立 ${C.nLive} 条（不到 2 条）：触发某一档时一次买完这一档。</div>`}
           ${['SPX', 'NDX'].map(k => { const t = C.tiers[k]; if (!t) return '<div class="nodata">暂无数据</div>'; const nm = k === 'SPX' ? '标普 500' : '纳指 100'; const maxT = Math.max(...t.tiers) + 5;
             return `<div><b>${nm}</b>　${U.fmtNum(t.last, 2)}（${t.date}），历史最高 ${U.fmtNum(t.high, 2)}（${t.highDate}），现在回撤 <b>${U.pct(t.dd)}</b>
               <div class="ddbar"><div class="fill" style="width:${Math.min(100, -t.dd*100/maxT*100)}%"></div>
                 ${t.tiers.map((x, i) => `<div class="mark" style="left:${x/maxT*100}%"><span>−${x}%</span></div>`).join('')}
                 <div class="now" style="left:${Math.min(100, -t.dd*100/maxT*100)}%"></div></div>
               <div class="small">${t.tiers.map((x, i) => `第 ${i+1} 档 −${x}%：${-t.dd*100 >= x ? '<b>已触发</b>' : `还差 ${(x + t.dd*100).toFixed(1)} 个百分点`}`).join('；')}</div></div>`; }).join('<hr style="border:none;border-top:1px dashed var(--line);margin:12px 0">')}
-          <p class="small muted" style="margin-bottom:0">每一档用掉货币基金的 1/3（按目标配置 15% 货币基金算，每档约等于总仓位的 5%）。这里看的是美国指数本身；你买的场外 QDII 基金净值会晚一天，还受汇率影响。</p>
+          <p class="small muted" style="margin-bottom:0">每一档用掉货币基金的 1/3（按目标配置 15% 货币基金算，每档约等于总仓位的 5%）。这里看的是美国指数本身；你买的 QDII 基金净值会晚一两天，还受汇率和溢价影响。</p>
         </div>
       </div>`;
     app.appendChild(top);
@@ -315,7 +315,7 @@ const Observe = (() => {
     app.appendChild(block('美元与全球', '美元大涨同时股票下跌，像全球流动性收缩。油价是这轮通胀的主要来源。', B.global, T));
     // 诊断表
     const d = C.diag; const diag = document.createElement('section');
-    const rowsTxt = [['收益率↑ + 股↓', '纯杀估值', '可逆：等利率企稳，逆向信号可信'], ['美元↑↑ + 股↓', '全球流动性收缩', '偏谨慎：等美元冲高回落'], ['黄金↑ + 收益率↑（股债双杀）', '通胀 / 信用担忧', '最接近危险：尤其盯紧信用']];
+    const rowsTxt = [['收益率↑ + 股↓', '纯杀估值', '可逆：等利率企稳'], ['美元↑↑ + 股↓', '全球流动性收缩', '偏谨慎：等美元冲高回落'], ['黄金↑ + 收益率↑（股债双杀）', '通胀 / 信用担忧', '最接近危险：尤其盯紧信用']];
     diag.innerHTML = `<h2>跨资产 · 找病因</h2><p class="muted small">下跌时先诊断病因落在“杀估值”还是“杀盈利”哪一边。下面用过去 1 个月的变化自动对照：10 年美债 ${U.sgn(d.dy,2,' 个百分点')}，标普 ${U.pct(d.ds)}，美元广义指数 ${U.pct(d.du)}，黄金 GLD ${U.pct(d.dg)}。</p>
       <div class="card tablewrap"><table><thead><tr><th>现象</th><th>病因</th><th>落点 / 应对</th><th>现在对得上吗</th></tr></thead><tbody>
       ${rowsTxt.map((r, i) => `<tr><td>${r[0]}</td><td style="text-align:left">${r[1]}</td><td style="text-align:left">${r[2]}</td><td>${d.rows[i] ? '<span class="tag r">对得上</span>' : '<span class="tag">没有</span>'}</td></tr>`).join('')}

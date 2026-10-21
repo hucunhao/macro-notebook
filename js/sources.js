@@ -18,12 +18,22 @@ const Sources = (() => {
         <li><b>S5TH / S5FI / MMTH（站上均线的股票比例）</b>：没找到能免费下载历史的公开来源，只在 TradingView 上能看。</li>
         <li><b>HY OAS / IG OAS / CCC 的长历史</b>：FRED 从 2026 年 4 月起这些 ICE 序列只给最近 3 年，更早的要向 ICE 购买。长历史用 BAA10Y 代替。</li>
         <li><b>黄金长历史</b>：FRED 已下架伦敦金价序列；这里用 GLD（纳斯达克网站，约 10 年）加一个网页读数。</li>
-        <li><b>含分红的总回报指数</b>：没找到免费可靠来源，第 1 周全部用价格指数。</li>
-        <li><b>估值 σ 表（VAL）</b>：没有免费、合规的长期市盈率历史，只做了今天的横截面。</li>
+        <li><b>含分红的总回报指数</b>：没找到免费可靠来源，回撤、加仓线和季节性都用价格指数（不含分红）。</li>
+        <li><b>估值和历史比</b>：没有免费、合规的长期市盈率历史，只做了今天的横截面。</li>
         <li><b>涨跌家数比</b>：交易所的涨跌家数没有免费历史；行情条上显示“暂无数据”。</li>
         <li><b>行业权重和对指数的贡献</b>：权重数据要付费，没做。</li>
-        <li><b>DXY 美元指数历史</b>：雅虎接口限流，用美联储广义美元指数（FRED DTWEXBGS）代替。</li>
+        <li><b>DXY 美元指数</b>：现在用东方财富的美元指数日线（“商品汇率”页）；“全部指标”页仍保留美联储广义美元指数（FRED DTWEXBGS）。</li>
       </ul></div>
+      <h2>新页面的数据来源</h2>
+      <div class="card small"><ul style="margin:0;padding-left:20px">
+        <li><b>全球股市、商品和汇率</b>：东方财富行情接口（push2his.eastmoney.com）日线收盘，2016 年起；布伦特原油、欧元、美元广义指数来自 FRED。期货是连续合约。</li>
+        <li><b>QDII 溢价</b>：场内收盘价来自东方财富行情接口（不复权）；单位净值和规模来自东方财富基金数据（fund.eastmoney.com/pingzhongdata）。溢价 = 同一天收盘价 ÷ 同一天单位净值 − 1，2019 年起。</li>
+        <li><b>经济日历</b>：FRED 发布日历（各项数据的发布日期）和美联储官网的议息会议日程，时间换算成台北时间。不含市场预期值（付费数据）。</li>
+        <li><b>财报日历</b>：纳斯达克官网财报日历接口，只列标普 500 里市值 300 亿美元以上的公司。不含分析师预期。</li>
+        <li><b>季节性</b>：用本站已有的标普 500（Cboe）和纳指 100（FRED）日线计算。</li>
+        <li><b>做不到的</b>：实时新闻、分析师一致预期、经济数据的市场预期值都是付费数据，没有做。</li>
+      </ul><p style="margin-bottom:0">这些都不需要登录，脚本的请求头写明是“个人研究脚本”，不伪装浏览器。东方财富是国内网站，GitHub 的美国服务器偶尔可能连不上；连不上时这一块沿用上次的数据，不影响其它部分。</p></div>
+      <div class="card small" id="src-extra" style="margin-top:8px">正在读取新页面的抓取状态…</div>
       <h2>本次抓取状态</h2>
       <div class="card small">${Object.keys(st).length ? Object.entries(st).map(([k, v]) => `${k}：${v === 'ok' ? '成功' : v === 'skipped' ? '<span class="tag warn">按约定没有抓取，沿用上次的文件</span>' : v === 'cached' ? '<span class="tag warn">失败，沿用上次的文件</span>' : '<span class="tag r">没有数据</span>'}`).join('<br>') : '本次用离线模式重建，没有联网抓取。'}</div>
       <h2>怎么更新数据</h2>
@@ -33,6 +43,13 @@ const Sources = (() => {
       <p>收益率曲线：美国财政部每日国债平价收益率；行业：SPDR 行业 ETF（纳斯达克官网日线，约 10 年）。</p>
       <p>标普 500 成分股（HM、BR、涨跌榜、VAL、RV、GP 里的个股）：名单和 GICS 行业来自维基百科；价格、市值、分析师一致预期来自纳斯达克官网；财报来自美国 SEC EDGAR 的 XBRL frames 接口。由 <code>constituents.py</code> 每天生成一次，不是实时。${window.SP ? `本次：${SP.generated}，${SP.n} 家，价格截至 ${SP.asof}。` : '本机还没生成。'}</p>
       <p style="margin-bottom:0">SEC 和维基百科要求请求头里写联系方式，脚本用环境变量 <code>MS_CONTACT</code>（默认是这个机器人的邮箱）。</p></div>`;
+    const lab = v => v === 'ok' ? '成功' : v === 'cached' ? '<span class="tag warn">失败，沿用上次的文件</span>' : '<span class="tag r">没有数据</span>';
+    U.need('data/calendar.js', 'data/earnings.js', 'data/qdii.js', 'data/world.js').then(() => {
+      const el = U.$('#src-extra'); if (!el) return;
+      const blocks = [['全球股市 / 商品汇率', WD], ['经济日历', CAL], ['财报日历', ERN], ['QDII 溢价', QD]];
+      el.innerHTML = blocks.map(([n, o]) => { const st = Object.entries(o.status || {}); const bad = st.filter(([, v]) => v !== 'ok');
+        return `<b>${n}</b>：${st.length} 个请求，${bad.length ? `${bad.length} 个没成功（${bad.slice(0, 6).map(([k, v]) => `${U.esc(k)} ${lab(v)}`).join('；')}${bad.length > 6 ? '…' : ''}）` : '全部成功'}${o.generated ? `，生成于 ${o.generated}` : ''}`; }).join('<br>');
+    }).catch(e => { const el = U.$('#src-extra'); if (el) el.textContent = '新页面的数据文件还没生成：' + e.message; });
   }
   return { render };
 })();

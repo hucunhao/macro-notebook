@@ -1,4 +1,4 @@
-// 市场页（第二层）：收益率曲线、行业 ETF、相对强弱工具；做不到的面板写明原因
+// 美股页、利率曲线页、技术页：行业 ETF、收益率曲线、相对强弱工具；做不到的面板写明原因
 const Markets = (() => {
   const fmtP = (x, nd=1) => x == null || isNaN(x) ? '—' : (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x*100).toFixed(nd) + '%';
   const hex2rgb = h => { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
@@ -58,8 +58,8 @@ const Markets = (() => {
     const rows = K.labels.map((l, i) => `<tr><td>${l}</td><td>${now.y[i] == null ? '—' : now.y[i].toFixed(2)}</td>${[w, m, y].map(o => `<td class="${o ? cls(now.y[i], o.y[i]) : ''}">${o ? bp(now.y[i], o.y[i]) : '—'}</td>`).join('')}</tr>`);
     const sp = (a, b, nm) => { const ia = K.labels.indexOf(a), ib = K.labels.indexOf(b); const f = o => o && o.y[ia] != null && o.y[ib] != null ? o.y[ia] - o.y[ib] : null;
       return `<tr class="base"><td>${nm}</td><td>${f(now) == null ? '—' : U.sgn(f(now) * 100, 0)}bp</td>${[w, m, y].map(o => `<td>${f(now) == null || f(o) == null ? '—' : U.sgn((f(now) - f(o)) * 100, 0)}</td>`).join('')}</tr>`; };
-    return `<table class="tbl-compact"><thead><tr><th>期限</th><th>最新 %</th><th>1 周变化 bp</th><th>1 个月 bp</th><th>年初至今 bp</th></tr></thead><tbody>${rows.join('')}${sp('10年', '2年', '10 年 − 2 年')}${sp('10年', '3月', '10 年 − 3 个月')}</tbody></table>
-      <div class="hint">收益率上升标红（对股票估值是压力），下降标绿。差值小于 0 叫“倒挂”。</div>`;
+    return `<table class="tbl-compact"><thead><tr><th>期限</th><th>最新 %</th><th>1 周变化</th><th>1 个月变化</th><th>1 年变化</th></tr></thead><tbody>${rows.join('')}${sp('10年', '2年', '10 年 − 2 年')}${sp('10年', '3月', '10 年 − 3 个月')}</tbody></table>
+      <div class="hint">变化的单位是 bp（基点，1bp = 0.01 个百分点）。收益率上升标红（对股票估值是压力），下降标绿。最后两行是期限利差，小于 0 叫“倒挂”。</div>`;
   }
   // ---------- 行业 ----------
   function sectors(el, K){
@@ -160,7 +160,7 @@ const Markets = (() => {
       const r = S.rows.filter(x => x[k] != null).sort((a, b) => b[k] - a[k]);
       const tb = (xs) => `<table class="tbl-compact"><tbody>${xs.map(x => `<tr class="click" data-t="${x.t}"><td>${x.t}</td><td style="text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">${U.esc(x.n)}</td><td>${x.px == null ? '—' : x.px.toFixed(2)}</td><td class="${x[k] >= 0 ? 'pos' : 'neg'}">${fmtP(x[k])}</td></tr>`).join('')}</tbody></table>`;
       el.innerHTML = `<div class="selrow">${[['d1', '1 日'], ['w1', '1 周'], ['m1', '1 月'], ['ytd', '今年']].map(([kk, n]) => `<button class="btn small ${kk === k ? 'primary' : ''}" data-mv="${kk}">${n}</button>`).join('')}<span class="hint">截至 ${S.asof}，共 ${S.n} 只</span></div>
-        <div class="grid g2" style="margin-top:6px"><div><div class="hint">涨幅最大</div>${tb(r.slice(0, 10))}</div><div><div class="hint">跌幅最大</div>${tb(r.slice(-10).reverse())}</div></div><div class="hint">点一行去 RV 同业比较。</div>`;
+        <div class="grid g2" style="margin-top:6px"><div><div class="hint">涨幅最大</div>${tb(r.slice(0, 10))}</div><div><div class="hint">跌幅最大</div>${tb(r.slice(-10).reverse())}</div></div><div class="hint">点一行去“同业比较”。</div>`;
       U.$$('[data-mv]', el).forEach(b => b.onclick = () => { k = b.dataset.mv; draw(); });
       U.$$('tr[data-t]', el).forEach(tr => tr.onclick = () => { location.hash = '#/rv/' + tr.dataset.t; });
     };
@@ -169,11 +169,12 @@ const Markets = (() => {
   // ---------- FI ----------
   function fi(app){
     const K = window.MK;
-    app.innerHTML = `<div class="mk-grid">
-      ${panel('', '美债收益率曲线', '最新 / 1 周前 / 1 个月前 / 年初', K && K.curve ? '<div id="mk-curve"></div>' : '<div class="nodata">暂无数据</div>')}
-      ${panel('', '收益率水平和变化', K && K.curve ? `最新 ${K.curve.lines[0].date}` : '', K && K.curve ? yieldTable(K.curve) : '<div class="nodata">暂无数据</div>', K && K.curve ? `<a class="s" href="${K.curve.url}" target="_blank" rel="noopener">美国财政部</a>` : '')}
-      ${panel('', '历史走势', '3 个月、2 年、10 年、30 年', '<div id="fi-h"></div>')}
-      ${panel('', '期限利差', '10 年 − 2 年、10 年 − 3 个月（小于 0 叫倒挂）', '<div id="fi-s"></div>')}
+    const tip = `<b>收益率曲线</b>：把 1 个月到 30 年各种期限的美国国债利率连成一条线。<br>· 正常形态：期限越长利率越高（向右上倾斜），因为钱借得越久风险越大。<br>· 倒挂：短期利率比长期还高，说明市场预计未来要降息、经济会变差。历史上 10 年减 2 年倒挂后 6–24 个月常有衰退，但 2022–2024 年倒挂两年多并没有衰退，所以只能当背景参考。<br>· 短端（3 个月、2 年）主要跟美联储政策走，长端（10 年、30 年）还反映通胀和财政担忧。`;
+    app.innerHTML = `<div class="pg-h"><h1>利率曲线</h1><span class="s">美国国债各期限收益率：现在 vs 1 周 / 1 个月 / 1 年前</span>${U.info(tip)}</div><div class="mk-grid">
+      ${panel('', '收益率曲线', '勾选要比较的日期', K && K.curve ? '<div id="mk-curve"></div>' : '<div class="nodata">暂无数据</div>')}
+      ${panel('', '各期限收益率和变化', K && K.curve ? `最新 ${K.curve.lines[0].date}` : '', K && K.curve ? yieldTable(K.curve) : '<div class="nodata">暂无数据</div>', K && K.curve ? `<a class="s" href="${K.curve.url}" target="_blank" rel="noopener">美国财政部</a>` : '')}
+      ${panel('', '倒挂历史', '10 年减 2 年、10 年减 3 个月；红色底 = 10 年减 2 年小于 0（倒挂）的时期', '<div id="fi-s"></div>', '', 'full')}
+      ${panel('', '各期限历史走势', '3 个月、2 年、10 年、30 年', '<div id="fi-h"></div>', '', 'full')}
     </div>`;
     if (K && K.curve) curve(U.$('#mk-curve'), K.curve);
     const ids = ['UST3MO', 'UST2', 'UST10', 'UST30'].filter(id => U.ser(id)); const b = U.ser('UST10');
@@ -181,7 +182,8 @@ const Markets = (() => {
     Charts.line(U.$('#fi-h'), { x: b.d.map(U.ts), ys: ids.map(al), labels: ['3 个月', '2 年', '10 年', '30 年'], range: '5Y', height: 230, logToggle: false, fmt: v => v == null ? '—' : v.toFixed(2) + '%' });
     const sp = ['T10Y2Y', 'T10Y3M'].filter(id => U.ser(id)); const s0 = U.ser(sp[0]);
     const al2 = id => { const m = new Map(U.ser(id).d.map((d, i) => [d, U.ser(id).v[i]])); return s0.d.map(d => m.get(d) ?? null); };
-    Charts.line(U.$('#fi-s'), { x: s0.d.map(U.ts), ys: sp.map(al2), labels: ['10 年 − 2 年', '10 年 − 3 个月'], range: '10Y', height: 230, hlines: [{ y:0, label:'0（倒挂线）' }], fmt: v => v == null ? '—' : v.toFixed(2) });
+    const bands = []; let b0 = null; s0.v.forEach((v, i) => { if (v < 0 && b0 == null) b0 = U.ts(s0.d[i]); if (v >= 0 && b0 != null){ bands.push([b0, U.ts(s0.d[i])]); b0 = null; } }); if (b0 != null) bands.push([b0, U.ts(U.last(s0.d))]);
+    Charts.line(U.$('#fi-s'), { x: s0.d.map(U.ts), ys: sp.map(al2), labels: ['10 年 − 2 年', '10 年 − 3 个月'], range: 'ALL', height: 240, xbands: bands, xbandColor: U.css('--r-soft'), hlines: [{ y:0, label:'0（倒挂线）' }], fmt: v => v == null ? '—' : v.toFixed(2) + '%' });
   }
   // ---------- GP 技术 / 相对强弱 ----------
   function gp(app){

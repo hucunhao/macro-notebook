@@ -45,5 +45,45 @@ const U = (() => {
     flush(); if (list) out.push('</ul>');
     return out.join('');
   }
-  return { md, $, $$, esc, ts, dstr, css, ser, last, stats, fmtNum, pct, sgn, median, mean, quant, store, worst, lightName };
+  // 按需加载大的数据文件（file:// 下也能用 <script>）
+  const loading = {};
+  function need(...srcs){
+    return Promise.all(srcs.map(src => loading[src] || (loading[src] = new Promise((ok, no) => {
+      const sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = () => { delete loading[src]; no(new Error('加载失败：' + src)); }; document.head.appendChild(sc); }))));
+  }
+  // 说明小卡片：<span class="ti" tabindex="0">ⓘ<template>…html…</template></span>，鼠标悬停或点击显示
+  const info = (html, label='ⓘ') => `<span class="ti" tabindex="0" role="button" aria-label="说明">${label}<template>${html}</template></span>`;
+  function initTips(){
+    const box = document.createElement('div'); box.id = 'tipbox'; box.setAttribute('role', 'tooltip'); document.body.appendChild(box);
+    let cur = null, pinned = false;
+    const show = el => { const t = el.querySelector('template'); if (!t) return; cur = el; box.innerHTML = t.innerHTML; box.style.display = 'block';
+      const r = el.getBoundingClientRect(), bw = box.offsetWidth, bh = box.offsetHeight;
+      let x = r.left + r.width/2 - bw/2, y = r.bottom + 8; x = Math.max(8, Math.min(innerWidth - bw - 8, x)); if (y + bh > innerHeight - 8) y = Math.max(8, r.top - bh - 8);
+      box.style.left = x + 'px'; box.style.top = y + 'px'; };
+    const hide = () => { box.style.display = 'none'; cur = null; pinned = false; };
+    document.addEventListener('mouseover', e => { if (pinned) return; const el = e.target.closest && e.target.closest('.ti'); if (el && el !== cur) show(el); else if (!el && cur && !box.contains(e.target)) hide(); });
+    document.addEventListener('click', e => { const el = e.target.closest && e.target.closest('.ti'); if (el){ e.stopPropagation(); e.preventDefault(); if (pinned && cur === el) hide(); else { show(el); pinned = true; } } else if (!box.contains(e.target)) hide(); }, true);
+    document.addEventListener('focusin', e => { const el = e.target.closest && e.target.closest('.ti'); if (el) show(el); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
+    window.addEventListener('hashchange', hide); window.addEventListener('scroll', () => { if (!pinned) hide(); }, { passive: true });
+  }
+  // 迷你走势图（canvas）：vals 数组；opts.color、opts.line（参考线数值）、opts.fill
+  function spark(cv, vals, opts={}){
+    const draw = () => {
+      const W = cv.clientWidth || 160, H = cv.clientHeight || 36, dpr = devicePixelRatio || 1; cv.width = W*dpr; cv.height = H*dpr;
+      const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, W, H);
+      const v = vals.filter(x => x != null && isFinite(x)); if (v.length < 2) return;
+      let mn = Math.min(...v), mx = Math.max(...v); (opts.lines || []).forEach(l => { mn = Math.min(mn, l.y); mx = Math.max(mx, l.y); });
+      const pad = (mx - mn) * .1 || 1; mn -= pad; mx += pad;
+      const X = i => 1 + i / (vals.length - 1) * (W - 6), Y = y => H - 2 - (y - mn) / (mx - mn) * (H - 4);
+      (opts.lines || []).forEach(l => { g.strokeStyle = l.color || css('--ink3'); g.lineWidth = 1; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(0, Y(l.y)); g.lineTo(W, Y(l.y)); g.stroke(); g.setLineDash([]); });
+      const col = opts.color || css('--accent');
+      g.beginPath(); let st = false; vals.forEach((y, i) => { if (y == null) return; st ? g.lineTo(X(i), Y(y)) : g.moveTo(X(i), Y(y)); st = true; });
+      g.strokeStyle = col; g.lineWidth = 1.5; g.stroke();
+      g.lineTo(X(vals.length - 1), H); g.lineTo(X(0), H); g.closePath(); g.globalAlpha = .12; g.fillStyle = col; g.fill(); g.globalAlpha = 1;
+      const li = vals.length - 1; g.fillStyle = col; g.beginPath(); g.arc(X(li), Y(vals[li]), 2.6, 0, 7); g.fill();
+    };
+    draw(); new ResizeObserver(draw).observe(cv);
+  }
+  return { need, info, initTips, spark, md, $, $$, esc, ts, dstr, css, ser, last, stats, fmtNum, pct, sgn, median, mean, quant, store, worst, lightName };
 })();
