@@ -21,7 +21,7 @@ const Notes = (() => {
     U.$('#n-save').onclick = () => { const text = U.$('#n-text').value.trim(); if (!text) return; const l = U.store.get(K, []); l.push({ date: U.$('#n-date').value || today(), text, t: Date.now() }); U.store.set(K, l); render(app); };
     U.$('#n-stage').onclick = () => { try { const C = Observe.compute(Settings.get()); U.$('#n-text').value += (U.$('#n-text').value ? '\n' : '') + `【阶段】${C.stage}：${C.one} ${C.diagTxt}`; } catch(e){} };
     U.$('#n-export').onclick = () => { const blob = new Blob([JSON.stringify({ notes: U.store.get(K, []), predictions: U.store.get('ms_predict', {}), settings: Settings.get() }, null, 2)], { type:'application/json' });
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `宏观观察本-笔记-${today()}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `Market-Dashboard-笔记-${today()}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
     U.$('#n-import').onchange = e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { try { const o = JSON.parse(rd.result); const inc = Array.isArray(o) ? o : o.notes || [];
       const l = U.store.get(K, []), seen = new Set(l.map(x => x.t)); inc.forEach(x => { if (x && x.date && x.text && !seen.has(x.t)) l.push({ date:x.date, text:x.text, t:x.t || Date.now() + Math.random() }); });
       U.store.set(K, l); if (o.predictions) U.store.set('ms_predict', Object.assign(U.store.get('ms_predict', {}), o.predictions)); render(app); } catch(err){ alert('文件格式不对：' + err.message); } }; rd.readAsText(f); };
