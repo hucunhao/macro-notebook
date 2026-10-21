@@ -1,4 +1,4 @@
-# 宏观观察本
+# Market Dashboard
 
 个人的学习 + 观察网站。纯静态（HTML/CSS/JS），不需要编译。
 
