@@ -275,8 +275,8 @@ const Observe = (() => {
     app.innerHTML = '';
     const top = document.createElement('div');
     top.innerHTML = `
-      <h1>观察</h1>
-      <p class="muted small">数据截至美股 ${MS.meta.newest} 收盘（数据生成于 ${MS.meta.generated} 台北时间）。先看信用这个总开关，再读其他。</p>
+      <h1>全部指标</h1>
+      <p class="muted small">这是第二层：原来观察页的全部内容。每天先看“总览”的 3 个核心，想深入再来这里。数据截至美股 ${MS.meta.newest} 收盘（数据生成于 ${MS.meta.generated} 台北时间）。</p>
       <div class="card verdict ${C.overall}" id="verdict">
         <div class="muted small">市场阶段</div>
         <div class="stage"><span class="light ${C.overall}"></span>${C.stage}</div>

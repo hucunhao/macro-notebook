@@ -19,13 +19,20 @@ const Sources = (() => {
         <li><b>HY OAS / IG OAS / CCC 的长历史</b>：FRED 从 2026 年 4 月起这些 ICE 序列只给最近 3 年，更早的要向 ICE 购买。长历史用 BAA10Y 代替。</li>
         <li><b>黄金长历史</b>：FRED 已下架伦敦金价序列；这里用 GLD（纳斯达克网站，约 10 年）加一个网页读数。</li>
         <li><b>含分红的总回报指数</b>：没找到免费可靠来源，第 1 周全部用价格指数。</li>
+        <li><b>估值 σ 表（VAL）</b>：没有免费、合规的长期市盈率历史，只做了今天的横截面。</li>
+        <li><b>涨跌家数比</b>：交易所的涨跌家数没有免费历史；行情条上显示“暂无数据”。</li>
+        <li><b>行业权重和对指数的贡献</b>：权重数据要付费，没做。</li>
         <li><b>DXY 美元指数历史</b>：雅虎接口限流，用美联储广义美元指数（FRED DTWEXBGS）代替。</li>
       </ul></div>
       <h2>本次抓取状态</h2>
-      <div class="card small">${Object.keys(st).length ? Object.entries(st).map(([k, v]) => `${k}：${v === 'ok' ? '成功' : v === 'cached' ? '<span class="tag warn">失败，沿用上次的文件</span>' : '<span class="tag r">没有数据</span>'}`).join('<br>') : '本次用离线模式重建，没有联网抓取。'}</div>
+      <div class="card small">${Object.keys(st).length ? Object.entries(st).map(([k, v]) => `${k}：${v === 'ok' ? '成功' : v === 'skipped' ? '<span class="tag warn">按约定没有抓取，沿用上次的文件</span>' : v === 'cached' ? '<span class="tag warn">失败，沿用上次的文件</span>' : '<span class="tag r">没有数据</span>'}`).join('<br>') : '本次用离线模式重建，没有联网抓取。'}</div>
       <h2>怎么更新数据</h2>
       <div class="card small"><p>在这个文件夹里运行：<code>python3 update_data.py</code>（大约 5 分钟）。只想用已经下载好的文件重建，运行 <code>python3 update_data.py --offline</code>。运行完刷新网页即可。</p>
-      <p style="margin-bottom:0">注意：FRED 会拦截“伪装成浏览器”的请求，脚本里特意用了默认请求头；纳斯达克和 CNN 则需要浏览器请求头。</p></div>`;
+      <p>请求头：脚本不伪装成浏览器。FRED 用 curl 默认请求头；纳斯达克、美国财政部、Cboe 用写明“个人研究脚本”的请求头。</p>
+      <p>CNN 恐惧贪婪只接受浏览器样式的请求头，所以按约定<b>默认不再抓取</b>，页面上的恐惧贪婪停在上次下载的日期（${MS.fg && MS.fg.date ? MS.fg.date : '—'}）。如果你决定接受，可以设置环境变量 <code>MS_CNN_BROWSER_UA=1</code> 再运行。</p>
+      <p>收益率曲线：美国财政部每日国债平价收益率；行业：SPDR 行业 ETF（纳斯达克官网日线，约 10 年）。</p>
+      <p>标普 500 成分股（HM、BR、涨跌榜、VAL、RV、GP 里的个股）：名单和 GICS 行业来自维基百科；价格、市值、分析师一致预期来自纳斯达克官网；财报来自美国 SEC EDGAR 的 XBRL frames 接口。由 <code>constituents.py</code> 每天生成一次，不是实时。${window.SP ? `本次：${SP.generated}，${SP.n} 家，价格截至 ${SP.asof}。` : '本机还没生成。'}</p>
+      <p style="margin-bottom:0">SEC 和维基百科要求请求头里写联系方式，脚本用环境变量 <code>MS_CONTACT</code>（默认是这个机器人的邮箱）。</p></div>`;
   }
   return { render };
 })();
