@@ -43,10 +43,11 @@ const Home = (() => {
       return `<div class="tk" title="${tip || k}，截至 ${s.d[n]}"><div class="k">${k}</div><div class="v">${U.fmtNum(s.v[n], nd)}<span class="c ${c >= 0 ? 'pos' : 'neg'}">${fmtP(c, 2)}</span></div></div>`; };
     const lv = (k, id, f, tip) => { const s = U.ser(id); if (!s) return ''; const n = s.v.length - 1, d = s.v[n] - s.v[n-1];
       return `<div class="tk" title="${tip}，截至 ${s.d[n]}"><div class="k">${k}</div><div class="v">${f(s.v[n])}<span class="c ${d > 0 ? 'neg' : d < 0 ? 'pos' : ''}">${U.sgn(d*100, 0)}bp</span></div></div>`; };
-    return `<div class="ticker">${cell('标普 500', U.ser('SPX'))}${cell('纳指 100', U.ser('NDX'))}${cell('道琼斯', snapItem('DJIA'))}${cell('恒生', snapItem('HSI'))}${cell('上证', snapItem('SSE'))}${cell('日经 225', snapItem('N225'))}
+    const cells = `${cell('标普 500', U.ser('SPX'))}${cell('纳指 100', U.ser('NDX'))}${cell('道琼斯', snapItem('DJIA'))}${cell('恒生', snapItem('HSI'))}${cell('上证', snapItem('SSE'))}${cell('日经 225', snapItem('N225'))}
       ${cell('黄金', snapItem('GOLD'), 1, 'COMEX 黄金期货连续合约')}${cell('原油', snapItem('CL'), 2, 'NYMEX WTI 原油期货连续合约')}${cell('美元指数', snapItem('DXY'), 2)}${cell('美元/人民币', snapItem('USDCNH'), 4, '美元兑离岸人民币')}
       ${lv('10 年美债', 'UST10', v => v.toFixed(2) + '%', '10 年期美国国债收益率；右边是 1 日变化，1bp = 0.01 个百分点')}
-      <div class="tk"><div class="k">美股数据截至</div><div class="v" style="font-size:12.5px">${MS.meta.newest}</div></div></div>`;
+      <div class="tk"><div class="k">美股数据截至</div><div class="v" style="font-size:12.5px">${MS.meta.newest}</div></div>`;
+    return `<div class="ticker"><div class="track">${cells}<div class="dup" aria-hidden="true">${cells}</div></div></div>`;
   }
 
   // ---------- 6 张卡片 ----------
