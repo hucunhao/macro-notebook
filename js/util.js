@@ -85,5 +85,14 @@ const U = (() => {
     };
     draw(); new ResizeObserver(draw).observe(cv);
   }
-  return { need, info, initTips, spark, md, $, $$, esc, ts, dstr, css, ser, last, stats, fmtNum, pct, sgn, median, mean, quant, store, worst, lightName };
+  // 数据新鲜度：“数据截至 YYYY-MM-DD”，比核心数据（总览用的美股收盘日 MS.meta.newest）旧就加一个淡淡的“未更新”。
+  // o.session = 这块数据最近一次成功抓取时对应的美股交易日（扩展数据才有）；o.partial = 这次没更新、沿用旧数据的条目数
+  const STALE_TIP = '这次自动更新没抓到这项数据，显示的是上一次成功抓取的结果';
+  const staleTag = (txt='未更新', tip=STALE_TIP) => `<span class="stale-tag" title="${tip}">${txt}</span>`;
+  function fresh(asof, o={}){
+    const core = window.MS && MS.meta && MS.meta.newest, ref = o.session || asof;
+    const old = !!(core && ref && ref < core);
+    return `<span class="fresh">数据截至 ${esc(asof || '—')}${old ? staleTag() : o.partial ? staleTag(`${o.partial} 项未更新`, '这几项这次没抓到，沿用上一次的数据（表里标了“未更新”）') : ''}</span>`;
+  }
+  return { fresh, staleTag, need, info, initTips, spark, md, $, $$, esc, ts, dstr, css, ser, last, stats, fmtNum, pct, sgn, median, mean, quant, store, worst, lightName };
 })();

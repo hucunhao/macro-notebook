@@ -48,7 +48,7 @@ const Pages2 = (() => {
     const all = agg(S.rows), tr = (n, a, cls='') => `<tr class="${cls}"><td>${n}</td><td>${a.n}</td><td>${fcap(a.mcap)}</td><td>${fx(a.pe)}</td><td>${fx(a.pem)}</td><td>${fx(a.fpe)}</td><td>${fx(a.ps, 2)}</td><td>${fx(a.pb, 2)}</td><td>${fpct(a.g)}</td></tr>`;
     app.innerHTML = `<div class="mk-grid">
       ${panel('', '估值和历史比', '历史均值 ± 1 / 2 个标准差（1–20 年窗口）', sigma, '<span class="badge n">数据暂不可得</span>', 'full')}
-      ${panel('', '今天的估值横截面', `标普 500 成分股，按 GICS 行业，截至 ${S.asof}（同一公司的两类股票只算一次）`, `<table class="tbl-compact"><thead><tr><th>行业</th><th>公司数</th><th>合计市值（美元）</th><th>合计市盈率</th><th>市盈率中位数</th><th>前瞻市盈率中位数</th><th>合计市销率</th><th>市净率中位数</th><th>隐含增长中位数</th></tr></thead><tbody>
+      ${panel('', '今天的估值横截面', `标普 500 成分股，按 GICS 行业，${U.fresh(S.asof)}（同一公司的两类股票只算一次）`, `<table class="tbl-compact"><thead><tr><th>行业</th><th>公司数</th><th>合计市值（美元）</th><th>合计市盈率</th><th>市盈率中位数</th><th>前瞻市盈率中位数</th><th>合计市销率</th><th>市净率中位数</th><th>隐含增长中位数</th></tr></thead><tbody>
         ${tr('标普 500 全部', all, 'base')}${secs.map(s => [s, agg(S.rows.filter(r => r.sec === s))]).sort((a, b) => b[1].mcap - a[1].mcap).map(([s, a]) => tr(s, a)).join('')}</tbody></table>
         <div class="hint">合计市盈率 = 合计市值 ÷ 合计净利润（只算净利润为正的公司）。${S.notes.fund} ${S.notes.pe} 这些数是“今天一个时点”，不能说明现在比历史贵还是便宜。</div>`, '', 'full')}
     </div>`;
@@ -72,7 +72,7 @@ const Pages2 = (() => {
   function hm(app){
     const S = window.SP; if (!S){ app.innerHTML = panel('', '热力图', '', noSP); return; }
     let k = 'd1';
-    app.innerHTML = panel('', '标普 500 热力图', `方块大小 = 市值，颜色 = 涨跌；截至 ${S.asof}`, `<div class="selrow">${[['d1', '1 日', .03], ['w1', '1 周', .06], ['m1', '1 月', .1], ['ytd', '今年', .3]].map(([kk, n]) => `<button class="btn small ${kk === k ? 'primary' : ''}" data-k="${kk}">${n}</button>`).join('')}<span class="hint">悬停看数，点方块去“同业比较”。</span></div><canvas id="hm-c" style="width:100%;display:block;margin-top:6px"></canvas><div class="hint">${S.notes.src}。没有市值或价格的公司不画；同一家公司的第二类股票（如 GOOG、FOX、NWS）不重复画。</div>`);
+    app.innerHTML = panel('', '标普 500 热力图', `方块大小 = 市值，颜色 = 涨跌；${U.fresh(S.asof)}`, `<div class="selrow">${[['d1', '1 日', .03], ['w1', '1 周', .06], ['m1', '1 月', .1], ['ytd', '今年', .3]].map(([kk, n]) => `<button class="btn small ${kk === k ? 'primary' : ''}" data-k="${kk}">${n}</button>`).join('')}<span class="hint">悬停看数，点方块去“同业比较”。</span></div><canvas id="hm-c" style="width:100%;display:block;margin-top:6px"></canvas><div class="hint">${S.notes.src}。没有市值或价格的公司不画；同一家公司的第二类股票（如 GOOG、FOX、NWS）不重复画。</div>`);
     const cv = U.$('#hm-c'); let rects = [], hover = null;
     const scaleOf = { d1: .03, w1: .06, m1: .1, ytd: .3 };
     function draw(){
@@ -130,7 +130,7 @@ const Pages2 = (() => {
   function rv(app, t0){
     const S = window.SP; if (!S){ app.innerHTML = panel('', '同业比较', '', noSP); return; }
     const by = Object.fromEntries(S.rows.map(r => [r.t, r]));
-    app.innerHTML = panel('', '同业比较', `同一 GICS 子行业的标普 500 公司；财报来自 SEC，价格截至 ${S.asof}`,
+    app.innerHTML = panel('', '同业比较', `同一 GICS 子行业的标普 500 公司；财报来自 SEC，价格${U.fresh(S.asof)}`,
       `<div class="selrow"><input id="rv-t" list="rv-l" value="${U.esc(t0 || U.store.get('ms_rv', 'AAPL'))}" size="8" aria-label="股票代码"><datalist id="rv-l">${S.rows.map(r => `<option value="${r.t}">${U.esc(r.n)}</option>`).join('')}</datalist>
         <button class="btn small primary" id="rv-go">载入</button><span class="hint">只能查标普 500 成分股（预先下载好的，不是实时）。</span></div><div id="rv-out" class="tablewrap" style="margin-top:6px"></div>
         <div class="hint">${S.notes.fund} ${S.notes.pe} EV（企业价值）= 市值 + 有息负债 − 现金；EBITDA = 营业利润 + 折旧摊销。银行、保险的毛利率、EV 类指标通常没有意义，显示为“—”。</div>`);

@@ -159,7 +159,7 @@ const Markets = (() => {
     const draw = () => {
       const r = S.rows.filter(x => x[k] != null).sort((a, b) => b[k] - a[k]);
       const tb = (xs) => `<table class="tbl-compact"><tbody>${xs.map(x => `<tr class="click" data-t="${x.t}"><td>${x.t}</td><td style="text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">${U.esc(x.n)}</td><td>${x.px == null ? '—' : x.px.toFixed(2)}</td><td class="${x[k] >= 0 ? 'pos' : 'neg'}">${fmtP(x[k])}</td></tr>`).join('')}</tbody></table>`;
-      el.innerHTML = `<div class="selrow">${[['d1', '1 日'], ['w1', '1 周'], ['m1', '1 月'], ['ytd', '今年']].map(([kk, n]) => `<button class="btn small ${kk === k ? 'primary' : ''}" data-mv="${kk}">${n}</button>`).join('')}<span class="hint">截至 ${S.asof}，共 ${S.n} 只</span></div>
+      el.innerHTML = `<div class="selrow">${[['d1', '1 日'], ['w1', '1 周'], ['m1', '1 月'], ['ytd', '今年']].map(([kk, n]) => `<button class="btn small ${kk === k ? 'primary' : ''}" data-mv="${kk}">${n}</button>`).join('')}<span class="hint">${U.fresh(S.asof)}，共 ${S.n} 只</span></div>
         <div class="grid g2" style="margin-top:6px"><div><div class="hint">涨幅最大</div>${tb(r.slice(0, 10))}</div><div><div class="hint">跌幅最大</div>${tb(r.slice(-10).reverse())}</div></div><div class="hint">点一行去“同业比较”。</div>`;
       U.$$('[data-mv]', el).forEach(b => b.onclick = () => { k = b.dataset.mv; draw(); });
       U.$$('tr[data-t]', el).forEach(tr => tr.onclick = () => { location.hash = '#/rv/' + tr.dataset.t; });

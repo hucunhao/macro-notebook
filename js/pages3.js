@@ -20,7 +20,7 @@ const Pages3 = (() => {
       el.innerHTML = `<table class="tbl-compact heat"><thead><tr><th>${opts.groupLabel || '地区'}</th><th>名称</th>${opts.note ? '<th style="text-align:left">是什么</th>' : ''}<th>最新</th><th>日期</th>${keys.map(([k, n]) => `<th style="cursor:pointer" data-s="${k}" title="点击按这一列排序">${n}${sortK === k ? ' ▼' : ''}</th>`).join('')}<th>距 1 年高点</th></tr></thead><tbody>
         ${rows.map(({ s, p, hi1 }) => { const g = !sortK && s.group !== lastG ? s.group : (sortK ? s.group : ''); lastG = s.group;
           const stale = (U.ts(opts.newest || p.date) - U.ts(p.date)) > 5*86400;
-          return `<tr class="click ${opts.sel && opts.sel() === s.id ? 'sel' : ''}" data-id="${s.id}"><td class="muted">${g}</td><td style="text-align:left"><b>${s.name}</b></td>${opts.note ? `<td style="text-align:left;color:var(--ink3);font-family:var(--font)">${s.note || ''}</td>` : ''}
+          return `<tr class="click ${opts.sel && opts.sel() === s.id ? 'sel' : ''}" data-id="${s.id}"><td class="muted">${g}</td><td style="text-align:left"><b>${s.name}</b>${s.stale ? U.staleTag() : ''}</td>${opts.note ? `<td style="text-align:left;color:var(--ink3);font-family:var(--font)">${s.note || ''}</td>` : ''}
             <td>${U.fmtNum(p.last, s.nd ?? 2)}${s.unit ? `<span class="muted small"> ${s.unit}</span>` : ''}</td><td class="${stale ? 'muted' : ''}">${p.date.slice(5)}</td>
             ${keys.map(([k, , sc]) => `<td class="hc" style="${heat(p[k], sc/100)}">${fmtP(p[k])}</td>`).join('')}<td class="${p.last/hi1 - 1 < -0.1 ? 'neg' : ''}">${fmtP(p.last/hi1 - 1)}</td></tr>`; }).join('')}
         </tbody></table>${sortK ? '<div class="hint"><a href="javascript:void 0" data-unsort>恢复按地区排列</a></div>' : ''}`;
@@ -50,7 +50,7 @@ const Pages3 = (() => {
     try { await U.need('data/world.js'); } catch(e){ return fail(app, e, '全球股指'); }
     const L = WD.indices; let sel = 'SPX'; const st = { rng: 'YTD', h: 300 };
     const newest = L.map(s => U.last(s.d)).sort().pop();
-    app.innerHTML = head('全球股市', `${L.length} 个主要指数，日线收盘（本地货币，不含分红）`, `数据来自东方财富行情接口，各市场收盘时间不同：亚洲先收，美国最后。表里“日期”是这个指数最近一个收盘日；如果抓取时某个市场还在交易，最后一天会是盘中价。<br><br>“距 1 年高点”：现价比过去一年最高收盘低多少，超过 10% 标红。颜色越深，涨跌越大。`) +
+    app.innerHTML = head('全球股市', `${L.length} 个主要指数，日线收盘（本地货币，不含分红） · ${U.fresh(WD.indices_asof || newest, { session: WD.session, partial: L.filter(s => s.stale).length })}`, `数据来自东方财富行情接口，各市场收盘时间不同：亚洲先收，美国最后。表里“日期”是这个指数最近一个收盘日；如果抓取时某个市场还在交易，最后一天会是盘中价。<br><br>“距 1 年高点”：现价比过去一年最高收盘低多少，超过 10% 标红。颜色越深，涨跌越大。`) +
       `<div class="mk-grid">${panel('', '主要指数表现', '点表头排序，点一行在下图加粗', '<div id="w-t" class="tablewrap"></div>', '', 'full')}${panel('', '走势对比', '起点 = 0%', '<div id="w-c"></div>', '', 'full')}</div>`;
     const t = perfTable(U.$('#w-t'), L, { newest, sel: () => sel, onSel: id => { sel = id; normChart(U.$('#w-c'), L, sel, st); } });
     normChart(U.$('#w-c'), L, sel, st);
@@ -67,7 +67,7 @@ const Pages3 = (() => {
       .filter(Boolean).map(s => ({ ...s, note: NOTE[s.id] || '', nd: s.nd ?? 2 }));
     let sel = 'GOLD';
     const newest = L.map(s => U.last(s.d)).sort().pop();
-    app.innerHTML = head('商品和汇率', '黄金、白银、铜、原油、美元、人民币', `期货用“连续合约”（东方财富，自动换到下一个主力月份，换月时会有小跳空）；布伦特原油、欧元、美元广义指数来自 FRED（通常晚几天）。<br><br>人民币汇率对你买的 QDII 基金有直接影响：美元兑人民币涨，用人民币计的美股基金净值也跟着涨。`) +
+    app.innerHTML = head('商品和汇率', `黄金、白银、铜、原油、美元、人民币 · ${U.fresh(WD.cmdty_asof || newest, { session: WD.session, partial: WD.cmdty.filter(s => s.stale).length })}`, `期货用“连续合约”（东方财富，自动换到下一个主力月份，换月时会有小跳空）；布伦特原油、欧元、美元广义指数来自 FRED（通常晚几天）。<br><br>人民币汇率对你买的 QDII 基金有直接影响：美元兑人民币涨，用人民币计的美股基金净值也跟着涨。`) +
       `<div class="mk-grid">${panel('', '最新价格和涨跌', '点一行看下面的走势图', '<div id="c-t" class="tablewrap"></div>', '', 'full')}${panel('', '走势', '', '<div class="selrow" id="c-n"></div><div id="c-c"></div>', '', 'full')}</div>`;
     const draw = () => { const s = L.find(x => x.id === sel); U.$('#c-n').innerHTML = `<b>${s.name}</b><span class="hint">${s.note}${s.unit ? '；单位：' + s.unit : ''}</span>`;
       Charts.line(U.$('#c-c'), { x: s.d.map(U.ts), ys: [s.v], labels: [s.name], range: '3Y', height: 300, fmt: v => v == null ? '—' : U.fmtNum(v, s.nd) }); };
@@ -98,7 +98,7 @@ const Pages3 = (() => {
     }
     app.innerHTML = head('经济日历', '美国重要经济数据和美联储议息会议，时间都是台北时间', `<b>怎么用</b>：重要数据公布前后市场波动通常变大。●●● 最重要（CPI 通胀、非农就业、PCE 通胀、美联储决议）。<br><br>${CAL.note}<br>美国夏令时（3 月到 11 月初）期间，数据一般在台北时间晚上 20:30 公布，冬令时 21:30。<br>只列发布日期，不含市场预期值（那是付费数据）。`) +
       `<div class="chips">${chip('下次美联储决议', nextOf(/FOMC/))}${chip('下次 CPI 通胀', nextOf(/CPI/))}${chip('下次非农就业', nextOf(/非农/))}${chip('下次 PCE 通胀', nextOf(/PCE/))}</div>
-      ${panel('', '日程', `生成于 ${CAL.generated}（台北时间）`, `<div class="selrow" style="margin-bottom:4px"><label><input type="checkbox" id="cal-imp" ${st.imp ? 'checked' : ''}> 只看重要的（●● 以上）</label><label><input type="checkbox" id="cal-all" ${st.all ? 'checked' : ''}> 显示未来 6 周（默认 3 周）</label><a href="#/ern">看财报日历 →</a></div><div id="cal-l"></div>`)}`;
+      ${panel('', '日程', `${U.fresh(CAL.asof || CAL.generated.slice(0, 10), { session: CAL.session, partial: CAL.stale_n })} · 生成于 ${CAL.generated}（台北时间）`, `<div class="selrow" style="margin-bottom:4px"><label><input type="checkbox" id="cal-imp" ${st.imp ? 'checked' : ''}> 只看重要的（●● 以上）</label><label><input type="checkbox" id="cal-all" ${st.all ? 'checked' : ''}> 显示未来 6 周（默认 3 周）</label><a href="#/ern">看财报日历 →</a></div><div id="cal-l"></div>`)}`;
     U.$('#cal-imp').onchange = e => { st.imp = e.target.checked; U.store.set('ms_cal', st); draw(); };
     U.$('#cal-all').onchange = e => { st.all = e.target.checked; U.store.set('ms_cal', st); draw(); };
     draw();
@@ -121,7 +121,7 @@ const Pages3 = (() => {
     const top = [...R].sort((a, b) => b.mcap - a.mcap).slice(0, 6);
     app.innerHTML = head('财报日历', `未来 2 周标普 500 大公司的财报日期`, `${ERN.note}<br><br>不含分析师预期（那是付费数据）。点一行去“同业比较”看这家公司和同行的估值。`) +
       `<div class="chips">${top.map(r => `<div class="chip"><div class="k">${U.esc(r.n)}</div><div class="v" style="font-size:18px">${r.t}</div><div class="hint">${r.date.slice(5)} ${r.when} · 台北 ${twWhen(r.date, r.when)}</div></div>`).join('')}</div>` +
-      panel('', '日程', `生成于 ${ERN.generated}（台北时间）`, `<div class="selrow" style="margin-bottom:4px"><label><input type="checkbox" id="e-big" ${st.big ? 'checked' : ''}> 只看市值 1000 亿美元以上</label></div>
+      panel('', '日程', `${U.fresh(ERN.asof || ERN.generated.slice(0, 10), { session: ERN.session, partial: ERN.stale_n })} · 生成于 ${ERN.generated}（台北时间）`, `<div class="selrow" style="margin-bottom:4px"><label><input type="checkbox" id="e-big" ${st.big ? 'checked' : ''}> 只看市值 1000 亿美元以上</label></div>
         <div class="tablewrap"><table class="tbl-compact"><thead><tr><th>代码</th><th style="text-align:left">公司</th><th style="text-align:left">行业</th><th>市值（美元）</th><th>美国时间</th><th>台北时间（约）</th></tr></thead><tbody id="e-l"></tbody></table></div>`);
     U.$('#e-big').onchange = e => { st.big = e.target.checked; U.store.set('ms_ern', st); draw(); };
     draw();
@@ -191,7 +191,7 @@ const Pages3 = (() => {
     const navDate = R.map(r => r.date).sort().pop();
     const fp = (x, nd=2) => x == null ? '—' : `${x > 0 ? '+' : ''}${x.toFixed(nd)}%`;
     const PTIP = `<b>溢价是什么</b>：场内价格比基金实际值（单位净值）贵多少。溢价 10% = 你花 110 元买到 100 元的美股；以后溢价回落，这 10 元就亏掉了，和美股涨跌无关。<br><br><b>怎么算</b>：同一个交易日的收盘价 ÷ 同一天的单位净值 − 1。<br><br><b>为什么总比今天晚</b>：QDII 买的是美股，美股收盘比 A 股晚，基金公司通常在 T+1（有时 T+2）晚上才公布 T 日净值。所以这里的“最新溢价”是净值已经公布的最近一天（现在是 ${navDate}），今天的收盘价要等净值出来才能算。盘中实时溢价要看行情软件的 IOPV（参考净值）。<br><br>颜色：3% 以下绿，3–5% 黄，5–10% 红，10% 以上深红。<span class="warnt">这几条线是常用经验值，不是检验过的规则。</span><br>LOF 用 A 类人民币份额的净值；ETF 和 LOF 的收盘价不复权。`;
-    app.innerHTML = head('QDII 溢价', `国内上市的纳指 100、标普 500 场内基金，每天的收盘溢价`, PTIP) +
+    app.innerHTML = head('QDII 溢价', `国内上市的纳指 100、标普 500 场内基金，每天的收盘溢价 · ${U.fresh(QD.asof || navDate, { session: QD.session, partial: F.filter(f => f.stale).length })}`, PTIP) +
       `<div class="chips"><div class="chip"><div class="k">纳指 100 · 中位溢价（${grp('纳指100').length} 只）</div><div class="v ${lvl(U.median(grp('纳指100'))).replace('rr', 'r')}">${fp(U.median(grp('纳指100')), 1)}</div><div class="hint">最低 ${fp(Math.min(...grp('纳指100')), 1)} · 最高 ${fp(Math.max(...grp('纳指100')), 1)}</div></div>
         <div class="chip"><div class="k">标普 500 · 中位溢价（${grp('标普500').length} 只）</div><div class="v ${lvl(U.median(grp('标普500'))).replace('rr', 'r')}">${fp(U.median(grp('标普500')), 1)}</div><div class="hint">最低 ${fp(Math.min(...grp('标普500')), 1)} · 最高 ${fp(Math.max(...grp('标普500')), 1)}</div></div>
         <div class="chip"><div class="k">净值日期</div><div class="v" style="font-size:18px">${navDate}</div><div class="hint">溢价按这一天的收盘价和净值算 ${U.info(PTIP)}</div></div>
@@ -204,7 +204,7 @@ const Pages3 = (() => {
     function table(){
       const rows = [...R].sort((a, b) => (val(b, st.sort) ?? -99) - (val(a, st.sort) ?? -99));
       U.$('#q-t').innerHTML = `<table class="tbl-compact"><thead><tr><th>勾选</th><th>代码</th><th style="text-align:left">名称</th><th>跟踪</th>${cols.map(([k, n]) => `<th data-s="${k}" style="cursor:pointer">${n}${st.sort === k ? ' ▼' : ''}</th>`).join('')}<th>收盘价</th><th>净值</th></tr></thead><tbody>
-        ${rows.map(r => `<tr class="${st.sel.includes(r.f.code) ? 'sel' : ''}"><td><input type="checkbox" data-c="${r.f.code}" ${st.sel.includes(r.f.code) ? 'checked' : ''} aria-label="画出 ${r.f.code}"></td><td><b>${r.f.code}</b></td><td style="text-align:left;max-width:170px;overflow:hidden;text-overflow:ellipsis" title="${U.esc(r.f.name)}">${U.esc(r.f.name.replace(/[(（]QDII.*$/, ''))}</td><td>${r.f.idx}${r.f.type === 'LOF' ? ' LOF' : ''}</td>
+        ${rows.map(r => `<tr class="${st.sel.includes(r.f.code) ? 'sel' : ''}"><td><input type="checkbox" data-c="${r.f.code}" ${st.sel.includes(r.f.code) ? 'checked' : ''} aria-label="画出 ${r.f.code}"></td><td><b>${r.f.code}</b>${r.f.stale ? U.staleTag() : ''}</td><td style="text-align:left;max-width:170px;overflow:hidden;text-overflow:ellipsis" title="${U.esc(r.f.name)}">${U.esc(r.f.name.replace(/[(（]QDII.*$/, ''))}</td><td>${r.f.idx}${r.f.type === 'LOF' ? ' LOF' : ''}</td>
           <td><span class="prem ${lvl(r.prem)}">${fp(r.prem)}</span></td><td><span class="prem ${lvl(r.a20)}">${fp(r.a20)}</span></td><td>${fp(r.hi60, 1)}</td><td>${fp(r.lo60, 1)}</td><td>${r.f.last_amt.toFixed(2)}</td><td>${r.f.scale ? r.f.scale.v.toFixed(0) : '—'}</td>
           <td>${U.last(r.f.close).toFixed(3)}</td><td>${U.last(r.f.nav).toFixed(4)}</td></tr>`).join('')}</tbody></table>
         <div class="hint">溢价、收盘价、净值都是 ${navDate} 这一天的。成交额是最近一个交易日（${F[0].last_close_date}）；规模是季报数据（${F[0].scale ? F[0].scale.date : '—'}）。成交额太小的基金买卖价差大。</div>`;
