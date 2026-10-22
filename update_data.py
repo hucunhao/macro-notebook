@@ -8,7 +8,7 @@ Market Dashboard 数据更新脚本
        /workspace/quant_course/week1_results.md, week2_results.md
 浏览器从 file:// 打开时不能 fetch JSON, 所以每个 JSON 同时写一份 .js (window.XXX = {...})。
 """
-import csv, json, os, sys, time, math, datetime as dt, statistics as st, subprocess, bisect
+import csv, json, os, sys, time, math, random, datetime as dt, statistics as st, subprocess, bisect
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -27,26 +27,54 @@ try: os.makedirs(QC, exist_ok=True)
 except OSError: QC = os.path.join(ROOT, 'content', 'results'); os.makedirs(QC, exist_ok=True)
 STATUS = {}   # source -> ok / cached / missing
 
-def fetch(url, path, headers=(), timeout=60, check=None, ua=UA):
-    """下载到 path; 失败则保留旧文件。返回 'ok' / 'cached' / 'missing'"""
-    if OFFLINE:
-        return 'cached' if os.path.exists(path) else 'missing'
+TRIES = max(1, int(os.environ.get('MS_RETRIES', '3')))
+BACKOFF = (2, 6, 12)
+# 测试用：MS_SIMULATE_FAIL=fred,treasury,cboe,nasdaq 让这些来源“连不上”（不发请求，直接按失败处理）
+SIM_FAIL = {x.strip() for x in os.environ.get('MS_SIMULATE_FAIL', '').split(',') if x.strip()}
+_HOST_FAILS = {}   # 同一主机连续 3 个请求彻底失败后，后面只试 1 次、超时缩短
+
+def fetch(url, path, headers=(), timeout=60, check=None, ua=UA, src=None, tries=None):
+    """下载到 path; 失败（重试后仍失败）则保留旧文件。返回 'ok' / 'cached' / 'missing'"""
+    fallback = lambda: 'cached' if os.path.exists(path) else 'missing'
+    if OFFLINE or (src and src in SIM_FAIL):
+        return fallback()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    host = url.split('/')[2]; dead = _HOST_FAILS.get(host, 0) >= 3
+    n, tmo = (1, min(timeout, 15)) if dead else (tries or TRIES, timeout)
     tmp = path + '.tmp'
-    cmd = ['curl', '-sL', '-m', str(timeout), '-o', tmp, '-w', '%{http_code}'] + (['-A', ua] if ua else [])
-    for h in headers: cmd += ['-H', h]
-    cmd.append(url)
-    try:
-        code = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 10).stdout.strip()
-    except Exception:
-        code = '000'
-    good = code == '200' and os.path.exists(tmp) and os.path.getsize(tmp) > 100
-    if good and check:
-        try: good = check(open(tmp, encoding='utf-8', errors='ignore').read())
-        except Exception: good = False
-    if good:
-        os.replace(tmp, path); return 'ok'
-    if os.path.exists(tmp): os.remove(tmp)
-    return 'cached' if os.path.exists(path) else 'missing'
+    for i in range(n):
+        if i: time.sleep(BACKOFF[min(i - 1, len(BACKOFF) - 1)] + random.random())
+        cmd = ['curl', '-sL', '--connect-timeout', '10', '-m', str(tmo), '-o', tmp, '-w', '%{http_code}'] + (['-A', ua] if ua else [])
+        for h in headers: cmd += ['-H', h]
+        cmd.append(url)
+        try:
+            code = subprocess.run(cmd, capture_output=True, text=True, timeout=tmo + 10).stdout.strip()
+        except Exception:
+            code = '000'
+        good = code == '200' and os.path.exists(tmp) and os.path.getsize(tmp) > 100
+        if good and check:
+            try: good = check(open(tmp, encoding='utf-8', errors='ignore').read())
+            except Exception: good = False
+        if good:
+            os.replace(tmp, path); _HOST_FAILS[host] = 0; return 'ok'
+        if os.path.exists(tmp): os.remove(tmp)
+    _HOST_FAILS[host] = _HOST_FAILS.get(host, 0) + 1
+    return fallback()
+
+# 核心来源：总览页（利率、信用、标普/纳指回撤、VIX、收益率曲线）要用的序列。只有它们“缺失”（抓不到且没有任何旧文件）才阻止发布。
+# 其余来源（其它 FRED/纳斯达克序列、CNN、东方财富、FRED 日历、财报日历、成分股）都只记录、不阻止。
+CORE_SOURCES = ['FRED:DGS10', 'FRED:DGS2', 'FRED:BAA10Y', 'FRED:BAMLH0A0HYM2', 'FRED:NASDAQ100', 'Cboe:SPX', 'Cboe:VIX']
+CORE_SERIES = ['UST10', 'UST2', 'T10Y2Y', 'BAA10Y', 'HY_OAS', 'SPX', 'NDX', 'VIX']
+
+def us_session(now=None):
+    """最近一个已经收盘的美股交易日（美东 16:15 之后算当天；不考虑节假日）"""
+    from zoneinfo import ZoneInfo
+    t = (now or dt.datetime.now(dt.timezone.utc)).astimezone(ZoneInfo('America/New_York'))
+    d = t.date()
+    if d.weekday() >= 5 or (t.hour, t.minute) < (16, 15):
+        d -= dt.timedelta(days=1)
+        while d.weekday() >= 5: d -= dt.timedelta(days=1)
+    return d.isoformat()
 
 # ---------------------------------------------------------------- 1. 抓取
 FRED = ['BAA10Y','AAA10Y','BAMLH0A0HYM2','BAMLH0A3HYC','BAMLH0A1HYBB','BAMLH0A2HYB','BAMLC0A0CM','BAMLC0A4CBBB',
@@ -62,22 +90,22 @@ def fetch_all():
     for s in FRED:
         # 注意: FRED 会拦截“浏览器样式”的 User-Agent, 用 curl 默认 UA 才能下载; 失败再试 ALFRED (同一机构的历史版本库)
         p = os.path.join(RAW,'fred',s+'.csv')
-        r = fetch(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={s}', p, timeout=30, check=lambda t: t.startswith('observation_date'), ua=None)
+        r = fetch(f'https://fred.stlouisfed.org/graph/fredgraph.csv?id={s}', p, timeout=30, check=lambda t: t.startswith('observation_date'), ua=None, src='fred', tries=2)
         if r != 'ok':
-            r = fetch(f'https://alfred.stlouisfed.org/graph/alfredgraph.csv?id={s}', p, check=lambda t: t.startswith('observation_date'), ua=None)
+            r = fetch(f'https://alfred.stlouisfed.org/graph/alfredgraph.csv?id={s}', p, timeout=40, check=lambda t: t.startswith('observation_date'), ua=None, src='fred', tries=2)
         STATUS['FRED:'+s] = r
     y = TODAY.year
     for yr in (y-1, y):
         for typ, nm in (('daily_treasury_yield_curve','par'),('daily_treasury_real_yield_curve','real')):
             p = os.path.join(RAW,'treasury',f'treasury_{nm}_yields_{yr}.csv')
-            STATUS[f'Treasury:{nm}{yr}'] = fetch(f'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{yr}/all?type={typ}&field_tdr_date_value={yr}&page&_format=csv', p, check=lambda t: t.startswith('Date'), ua=HUA)
-    STATUS['Cboe:SPX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/SPX_History.csv', os.path.join(RAW,'other','cboe_SPX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA)
-    STATUS['Cboe:VVIX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/VVIX_History.csv', os.path.join(RAW,'other','cboe_VVIX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA)
-    STATUS['Cboe:VIX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv', os.path.join(RAW,'other','cboe_VIX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA)
+            STATUS[f'Treasury:{nm}{yr}'] = fetch(f'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{yr}/all?type={typ}&field_tdr_date_value={yr}&page&_format=csv', p, check=lambda t: t.startswith('Date'), ua=HUA, src='treasury')
+    STATUS['Cboe:SPX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/SPX_History.csv', os.path.join(RAW,'other','cboe_SPX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA, src='cboe')
+    STATUS['Cboe:VVIX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/VVIX_History.csv', os.path.join(RAW,'other','cboe_VVIX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA, src='cboe')
+    STATUS['Cboe:VIX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv', os.path.join(RAW,'other','cboe_VIX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA, src='cboe')
     frm = (TODAY - dt.timedelta(days=3700)).isoformat()
     for t in ETFS + [x for x,_ in SECTORS]:
         STATUS['Nasdaq:'+t] = fetch(f'https://api.nasdaq.com/api/quote/{t}/historical?assetclass=etf&fromdate={frm}&todate={TODAY}&limit=99999',
-              os.path.join(RAW,'nasdaq',t+'.json'), headers=['Accept: application/json'], check=lambda s: '"rows"' in s, ua=HUA)
+              os.path.join(RAW,'nasdaq',t+'.json'), headers=['Accept: application/json'], check=lambda s: '"rows"' in s, ua=HUA, src='nasdaq')
         time.sleep(0.5)
     if not CNN_BROWSER_UA:
         for k, f in (('CNN:F&G 1y','cnn_fear_greed.json'), ('CNN:F&G 2020+','cnn_fear_greed_since2020.json')):
@@ -229,7 +257,11 @@ def build_series():
     except Exception as e:
         print('CNN parse failed', e)
     manual = json.load(open(os.path.join(ROOT,'manual_values.json'))) if os.path.exists(os.path.join(ROOT,'manual_values.json')) else {}
-    meta = dict(generated=dt.datetime.now().strftime('%Y-%m-%d %H:%M'), tz='台北时间', status=STATUS)
+    core_status = {k: STATUS.get(k, 'cached' if OFFLINE else 'missing') for k in CORE_SOURCES}
+    meta = dict(generated=dt.datetime.now().strftime('%Y-%m-%d %H:%M'), tz='台北时间', status=STATUS,
+                session=us_session(),                       # 这次运行时最近一个已收盘的美股交易日
+                core=core_status, core_series=CORE_SERIES,
+                core_ok=all(v == 'ok' for v in core_status.values()))   # 核心来源这次全部抓到新文件
     return dict(meta=meta, series=S, fg=fg, manual=manual)
 
 # ---------------------------------------------------------------- 2b. 市场页：收益率曲线 + 行业 ETF

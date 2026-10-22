@@ -187,6 +187,12 @@ def build():
                           fund='财报数字取 SEC XBRL frames 里最近一个已申报的完整财年（表里“财年截至”那一列）；资产负债表取最近一个季末。不是“过去 12 个月”。少数公司（例如换了 SEC 编号的）财报缺失，显示“—”。',
                           pe='市盈率 = 市值 ÷ 最近财年净利润；前瞻市盈率 = 股价 ÷ 紧接着的下一个财年的一致预期 EPS（纳斯达克页面，数据商 Zacks）；隐含增长 = 市盈率 ÷ 前瞻市盈率 − 1（市场预期的下一年利润增长，粗略）；PEG = 市盈率 ÷（隐含增长 × 100）。',
                           surv='广度用的是现在的成分股名单往回算，过去被剔除的公司不在里面（幸存者偏差）。'))
+    # 保险：这次有日线的公司比上一版少很多（来源大面积连不上），就保留上一版，不覆盖
+    try:
+        old = json.load(open(os.path.join(OUT, 'sp500.json'))); old_h = sum(1 for r in old.get('rows', []) if r.get('hist'))
+    except Exception: old_h = 0
+    if old_h and len(H) < 0.8 * old_h:
+        print(f'sp500: 这次只有 {len(H)} 家有日线（上一版 {old_h} 家），保留上一版 data/sp500*，不覆盖'); return
     for ext, pre in (('json', ''), ('js', 'window.SP = ')):
         with open(os.path.join(OUT, f'sp500.{ext}'), 'w') as f: f.write(pre + json.dumps(out, ensure_ascii=False, separators=(',', ':')) + (';' if pre else ''))
     # GP 页用的个股日线（按需加载）：共用日期轴，缺的天写 null
