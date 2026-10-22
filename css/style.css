@@ -315,3 +315,6 @@ canvas.bars{width:100%;display:block}
 .tools .btn{white-space:nowrap}
 @media (max-width:1400px){nav.main a,nav.main .more>button{padding:3px 6px;font-size:13px}header.top .wrap{gap:10px}.brand{font-size:14px}}
 .hc-v{font-size:clamp(22px,2.1vw,30px)}
+/* 数据新鲜度：数据截至 + 淡淡的“未更新” */
+.fresh{white-space:nowrap}
+.stale-tag{display:inline-block;margin-left:6px;padding:0 5px;border:1px solid var(--y);border-radius:3px;color:var(--y);font-size:10.5px;line-height:15px;font-weight:400;opacity:.8;vertical-align:1px;cursor:help;font-family:var(--font)}
