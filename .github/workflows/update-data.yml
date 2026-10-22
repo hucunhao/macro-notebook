@@ -4,13 +4,15 @@ name: 每日更新数据
 
 on:
   schedule:
-    - cron: '30 22 * * 1-5'   # UTC 22:30（周一到周五）= 台北时间次日 06:30，美股收盘之后
-  workflow_dispatch: {}        # Actions 页面上的 “Run workflow” 按钮，手动跑一次
+    - cron: '30 22 * * 1-5'   # 主时间：UTC 22:30（周一到周五）= 台北时间周二到周六 06:30，美股收盘之后
+    - cron: '45 23 * * 1-5'   # 备用：UTC 23:45 = 台北时间 07:45。GitHub 定时任务常常迟到或漏发；已经更新过就直接结束
+  workflow_dispatch: {}        # Actions 页面上的 “Run workflow” 按钮，手动跑一次（总是完整运行）
 
 permissions:
   contents: write   # 提交并推送 data/
   pages: write      # 调用 “Request a GitHub Pages build” 接口
 
+# 同一时间只跑一个：后来的排队等前一个跑完（不取消正在跑的），避免两次运行互相覆盖、推送冲突。
 concurrency:
   group: update-data
   cancel-in-progress: false
@@ -22,20 +24,31 @@ env:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
+      # 取 main 的最新版本（不是触发时的旧版本）：排队等到的任务也能看到前一次刚提交的数据
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
 
+      # 只对定时任务：已发布的数据如果已经对应最近一个美股交易日、而且核心来源当时全部抓到新数据，就跳过（任务显示成功，不提交）
+      - name: 检查今天是否已经更新过
+        id: fresh
+        if: github.event_name == 'schedule'
+        run: python3 quality_gate.py --already-updated
+
       - name: 安装依赖
+        if: steps.fresh.outputs.skip != 'true'
         run: pip install -r requirements.txt
 
       # raw/ 是下载缓存：某个来源当天抓取失败时，脚本沿用上次的文件。
       # 缓存放在 Actions cache 里，不提交进仓库（成分股原始数据约 50MB）。
       - name: 取回上次的下载缓存
+        if: steps.fresh.outputs.skip != 'true'
         uses: actions/cache/restore@v4
         with:
           path: raw
@@ -43,52 +56,59 @@ jobs:
           restore-keys: raw-
 
       - name: 建好 raw/ 子文件夹
+        if: steps.fresh.outputs.skip != 'true'
         run: mkdir -p raw/fred raw/treasury raw/other raw/nasdaq raw/cnn raw/sp500 raw/em raw/cal raw/earnings raw/qdii
 
       # 这一步也会跑 extra_data.py（全球股指、商品汇率、经济日历、财报日历、QDII 溢价）。
-      # 扩展数据每一块单独容错：东方财富等来源连不上时沿用缓存/上一版文件，不会让这一步失败。
+      # 每个请求最多试 3 次；扩展数据抓不到时沿用缓存或上一版 data/*.json，不会让这一步失败，也不会清空已发布的数据。
       - name: 抓取宏观序列并重建 data/
+        if: steps.fresh.outputs.skip != 'true'
         env:
           MS_QC_DIR: ${{ runner.temp }}/quant_course   # 课程结果 markdown 写到临时目录，不进仓库
         run: python3 update_data.py
 
       - name: 抓取标普 500 成分股（热力图、广度、估值、同业）
+        if: steps.fresh.outputs.skip != 'true'
         run: python3 constituents.py
         timeout-minutes: 40
         continue-on-error: true   # 失败时 data/sp500* 保持上一版，其它数据照常更新
 
       - name: 保存下载缓存
-        if: always()
+        if: always() && steps.fresh.outputs.skip != 'true'
         uses: actions/cache/save@v4
         with:
           path: raw
           key: raw-${{ github.run_id }}
 
-      - name: 质量检查（有来源缺失就不提交，避免把残缺数据发布出去）
-        run: |
-          python3 - <<'PY'
-          import json, sys
-          st = json.load(open('data/series.json'))['meta']['status']
-          bad = {k: v for k, v in st.items() if v == 'missing'}
-          print('来源状态：', {v: sum(1 for x in st.values() if x == v) for v in set(st.values())})
-          if bad:
-              print('缺失：', bad); sys.exit(1)
-          PY
+      # 只有核心数据（总览用的利率、信用利差、标普/纳指、VIX）缺失才不提交；扩展数据只给警告。规则见 quality_gate.py。
+      - name: 质量检查
+        if: steps.fresh.outputs.skip != 'true'
+        run: python3 quality_gate.py
 
       - name: 提交并推送
         id: commit
+        if: steps.fresh.outputs.skip != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/
-          if git diff --cached --quiet; then
-            echo "没有变化"; echo "pushed=false" >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          git commit -m "数据更新 $(date +%Y-%m-%d)"
-          git fetch --depth=50 origin main
-          git rebase origin/main
-          git push origin HEAD:main
-          echo "pushed=true" >> "$GITHUB_OUTPUT"
+          msg="数据更新 $(date +%Y-%m-%d)"
+          for attempt in 1 2 3; do
+            git fetch --depth=50 origin main
+            # 以 main 的最新版本为底，只换上这次生成的 data/（数据以这次为准，代码以 main 为准），不会再出现 rebase 冲突
+            tmp=$(mktemp -d); cp -r data "$tmp/"
+            git reset -q --hard origin/main
+            rm -rf data && cp -r "$tmp/data" data && rm -rf "$tmp"
+            git add -A data/
+            if git diff --cached --quiet; then
+              echo "没有变化"; echo "pushed=false" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            git commit -q -m "$msg"
+            if git push origin HEAD:main; then
+              echo "pushed=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            echo "推送被拒（main 刚好有新提交），第 $attempt 次重试"; sleep $((attempt * 5))
+          done
+          echo "::error::推送 3 次都失败"; exit 1
 
       # 用 GITHUB_TOKEN 推送的提交不会触发 Pages 的自动构建（GitHub 文档明确写了），
       # 所以这里显式请求一次构建。仅适用于 Pages 来源 = “Deploy from a branch”（build_type = legacy）。
