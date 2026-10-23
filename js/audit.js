@@ -31,10 +31,19 @@ const Audit = (() => {
   const signed = x => x == null || isNaN(x) ? '—' : (x > 0 ? '+' : '') + Math.round(x);
   const pct1 = y => y == null || isNaN(y) ? '—' : (y * 100 > 0 ? '+' : '') + (y * 100).toFixed(1) + '%';
 
+  // 还没过线才写「还差」。已经过线写「已超门槛」，避免出现「还差 -30」。
+  // 读数严格高于门槛、但四舍五入后超额为 0：写「缺口已满足」（仍算过线）。
+  function legPhrase(value, line, rounded, plus){
+    if (value > line){
+      const over = rounded - line;
+      return over > 0 ? `已超门槛 ${over}bp` : '缺口已满足';
+    }
+    const gap = line - rounded;
+    return `距 ${plus ? '+' : ''}${line} 还差 ${gap > 0 ? gap : 0}`;
+  }
   function sent1(d, live){
     const hyR = Math.round(d.hy), dlt = Math.round(d.ig3m);
-    const gapHy = d.hyLine - hyR, gapIg = d.igWiden - dlt;
-    return `${live ? '是' : '否'} — HY ${hyR}bp（距 ${d.hyLine} 还差 ${gapHy}）；IG 63日变化 ${signed(dlt)}bp（距 +${d.igWiden} 还差 ${gapIg}）`;
+    return `${live ? '是' : '否'} — HY ${hyR}bp（${legPhrase(d.hy, d.hyLine, hyR, false)}）；IG 63日变化 ${signed(dlt)}bp（${legPhrase(d.ig3m, d.igWiden, dlt, true)}）`;
   }
   function sent2(d, live){
     const cpi = `核心CPI同比 ${d.cNow == null ? '—' : d.cNow.toFixed(1)}% vs 3个月前 ${d.cPrev == null ? '—' : d.cPrev.toFixed(1)}%（差值 ${d.diff == null ? '—' : d.diff.toFixed(1)}pt，需≥0.1）`;
@@ -162,7 +171,7 @@ const Audit = (() => {
       <p class="small" style="margin:0">${COPY.def[2]}</p>
       <p class="audit-sent">${d3 ? U.esc(sent3(d3, t[2].live)) : '无数据'}</p>
       <p class="hint">${d3 ? `${d3.curM} 月初至今 ${pct1(d3.mtd)}（${d3.mtdDays} 个交易日，不计入）。52 周收盘高点 ${d3.max252.toFixed(2)}（${d3.hiDate}）；近 20 日最高 ${d3.max20.toFixed(2)}；最新 ${d3.last.toFixed(2)}（${d3.lastDate}）。` : ''}来源 ${fred('DCOILWTICO', 'WTI')}</p>
-      <div class="audit-fn">${COPY.rev23}。11/10 若10月核心同比≥2.6%（对7月2.5%）且仍在加息9个月窗内 → ②重新成立。</div>
+      <div class="audit-fn">${COPY.rev23}</div>
     </div></section>`);
 
     blocks.push(`<section class="panel" id="audit-ev"><div class="ph"><span class="t">${COPY.names[3]}</span><span class="r">${badge(t[3].live)}</span></div><div class="pb">
@@ -218,7 +227,7 @@ const Audit = (() => {
     const br = breadth();
     const vx = U.ser('VIX'), hy = U.ser('HY_OAS'), ig = U.ser('IG_OAS');
     const vxL = vx ? U.last(vx.v) : null, vxD = vx ? U.last(vx.d) : null;
-    const brLine = br ? `站上 200 日线 ${br.p200 == null ? '—' : br.p200 + '%'}，站上 50 日线 ${br.p50 == null ? '—' : br.p50 + '%'}（${br.asof}，${br.n} 家）。52 周新高 ${br.hi}、新低 ${br.lo}。<a href="#/br">广度页</a>` : '宽度暂缺（标普成分股数据还没加载）。';
+    const brLine = br ? `站上 200 日线 ${br.p200 == null ? '—' : br.p200 + '%'}，站上 50 日线 ${br.p50 == null ? '—' : br.p50 + '%'}（${br.asof}，${br.n} 家）。52 周新高 ${br.hi}、新低 ${br.lo}。高于/低于 20、50、100、200 日线的只数，和最新一天的首次跌破、首次突破，见下面「成分股均线」（<a href="#audit-breadth">跳到这块</a>，<a href="#/br">广度页</a>）。` : '宽度暂缺（标普成分股数据还没加载）。';
     const fg = window.MS && MS.fg && MS.fg.score != null ? `<p class="hint">可选参考（权重低于宽度，不进概率）：CNN 恐惧贪婪 ${Number(MS.fg.score).toFixed(0)}（${MS.fg.date || '—'}）。本页不依赖它；没有这列时上面三行仍然成立。</p>` : '';
     return `<section class="panel" id="audit-mood"><div class="ph"><span class="t">自建情绪（非 CNN）</span><span class="s">同页次要，不改概率</span></div><div class="pb">
       <p class="audit-sent">${COPY.mood}</p>
@@ -248,23 +257,15 @@ const Audit = (() => {
     [['audit-cds-date', 'ai_cds_date'], ['audit-cds-src', 'ai_cds_src'], ['audit-bond', 'ai_bond'], ['audit-bond-date', 'ai_bond_date'], ['audit-bond-src', 'ai_bond_src'], ['audit-side', 'ai_side']].forEach(([id, k]) => on(id, e => set(k, e.target.value)));
   }
 
-  function fillQdii(){
-    const el = U.$('#audit-qdii'); if (!el) return;
-    U.need('data/qdii.js').then(() => {
-      if (!el.isConnected || !window.QD || !QD.funds) return;
-      const prem = f => (f.prem && f.prem.length) ? U.last(f.prem) : null;
-      const dt = f => (f.d && f.d.length) ? U.last(f.d) : null;
-      const med = idx => { const xs = QD.funds.filter(f => f.idx === idx).map(prem).filter(x => x != null); return xs.length ? U.median(xs) : null; };
-      const fp = x => x == null ? '—' : (x > 0 ? '+' : '') + x.toFixed(1) + '%';
-      const dates = QD.funds.map(dt).filter(Boolean).sort();
-      const one = code => { const f = QD.funds.find(x => x.code === code); return f ? `${f.code} ${fp(prem(f))}` : ''; };
-      const sp = med('标普500'), nq = med('纳指100');
-      const missing = sp == null && nq == null;
-      el.innerHTML = missing
-        ? '<p>溢价暂缺。无溢价数据，这里不暗示该加仓。隐形损耗：暂缺。</p>'
-        : `<div class="kv"><span>标普 500 场内中位溢价 <b>${fp(sp)}</b></span><span>纳指 100 场内中位溢价 <b>${fp(nq)}</b></span><span>净值日 <b>${dates.length ? dates[dates.length - 1] : '—'}</b></span><span>${one('513500')} ${one('513100')}</span></div>
-          <p class="hint">目标是场外 QDII（按净值申购，没有场内溢价）。场内溢价只展示，不暗示该加仓。跟踪或隐形损耗：暂缺。指数距档位见上表。货币基金余额暂缺，每档仍是余额的 1/3。<a href="#/qdii">QDII 溢价页</a></p>`;
-    }).catch(() => { if (el.isConnected) el.innerHTML = '<p>溢价暂缺。无溢价数据，这里不暗示该加仓。隐形损耗：暂缺。</p>'; });
+  function mountExtras(tiers){
+    const q = U.$('#audit-qdii');
+    if (q) QdiiExec.mount(q, tiers);
+    const b = U.$('#audit-breadth-slot');
+    if (!b) return;
+    Breadth.load().then(res => {
+      if (!b.isConnected) return;
+      b.innerHTML = res.data ? Breadth.html(res.data) : `<section class="panel" id="audit-breadth"><div class="ph"><span class="t">成分股均线</span><span class="s">次要，不改概率</span></div><div class="pb"><p>暂缺。${U.esc(res.error || '成分股日线没有加载')}。缺了就不编高于、低于的只数。</p></div></section>`;
+    });
   }
 
   function render(app){
@@ -305,11 +306,12 @@ const Audit = (() => {
         </tbody></table>
         <p class="hint">每档资金 = 货币基金余额的 1/3。货币基金余额暂缺，这里不编一个金额。常规定投和档位加仓是两套动作；未到档位只做定投。黄金：若组合中黄金权重跌破 12%，再平衡回 15%（组合权重暂缺，与档位无关）。不要把 SOX / 单主题回撤当成正式加仓档位。</p>
       </div></section>
+      <div id="audit-qdii" style="margin-top:8px"><p class="hint">正在读场内溢价…</p></div>
       <div style="margin-top:8px">${confirmHTML()}</div>
       <div class="grid g2" style="margin-top:8px">${moodHTML(T)}${qqqHTML()}</div>
-      <section class="panel" style="margin-top:8px"><div class="ph"><span class="t">QDII 执行</span><span class="s">溢价对照，不是加仓条件</span></div><div class="pb" id="audit-qdii"><p class="hint">正在读场内溢价…</p></div></section>`;
+      <div id="audit-breadth-slot" style="margin-top:8px"><p class="hint">正在数成分股均线…</p></div>`;
     bindEvidence();
-    fillQdii();
+    mountExtras(C.tiers);
   }
 
   return { render, COPY, sent1, sent2, sent3, sent4, bucket };

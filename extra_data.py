@@ -8,7 +8,9 @@ Market Dashboard 扩展数据：全球股指、商品汇率、经济日历、财
 
 来源（都不需要登录，也不伪装浏览器；请求头写明是个人研究脚本）：
 - 东方财富 行情 K 线接口 push2his.eastmoney.com（全球股指、COMEX 金银铜、美元指数、离岸人民币、场内 ETF 收盘价）
+- 腾讯行情未复权日线 web.ifzq.gtimg.cn（仅当东方财富行情失败时，补 QDII 场内收盘里原来没有的日期）
 - 东方财富 基金数据 fund.eastmoney.com/pingzhongdata（QDII 基金单位净值历史、规模）
+- 东财净值表 api.fund.eastmoney.com/f10/lsjz、新浪基金净值（仅当 pingzhong 失败时，补单位净值）
 - FRED 发布日历 fred.stlouisfed.org/releases/calendar（CPI、非农、GDP、PCE 等的发布日期，美国中部时间）
 - 美联储 FOMC 会议日程 federalreserve.gov
 - 纳斯达克 财报日历 api.nasdaq.com/api/calendar/earnings
@@ -290,6 +292,108 @@ QDII = [  # (代码, 跟踪, 类型)
     ('513870', '纳指100', 'ETF'), ('159696', '纳指100', 'ETF'), ('161130', '纳指100', 'LOF'),
     ('513500', '标普500', 'ETF'), ('159612', '标普500', 'ETF'), ('513650', '标普500', 'ETF'), ('159655', '标普500', 'ETF'), ('161125', '标普500', 'LOF'),
 ]
+def _mkt(code):
+    """沪市 5/6 开头，其余（15/16 的深市 ETF、LOF）走 sz。"""
+    return ('sh' if code.startswith(('5', '6')) else 'sz') + code
+
+def _drop_unclosed(rows):
+    """腾讯日线的最后一根如果是今天、且还没到 15:05（上海），那是盘中价，不能当成收盘。"""
+    if not rows: return rows
+    sh = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
+    if rows[-1][0] == sh.date().isoformat() and (sh.hour, sh.minute) < (15, 5):
+        return rows[:-1]
+    return rows
+
+def tencent_kline(code, count=40):
+    """未复权日线 [(date, close)]。只要日期和收盘，成交量不是成交额，不拿来用。失败返回 []。"""
+    sym = _mkt(code)
+    url = f'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={sym},day,,,{count},'
+    p = os.path.join(RAW, 'qdii', f'tx_{code}.json')
+    st = STATUS['腾讯日线:' + code] = get(url, p, check=lambda t: '"day"' in t, src='tencent')
+    if not os.path.exists(p): return [], st
+    try: rows = json.load(open(p))['data'][sym]['day']
+    except Exception: return [], st
+    out = []
+    for r in rows:
+        try: out.append((r[0], float(r[2])))
+        except (TypeError, ValueError, IndexError): pass
+    return _drop_unclosed(out), st
+
+def nav_lsjz(code):
+    """东财基金净值表，最近 60 个公布日。DWJZ = 单位净值。"""
+    url = f'https://api.fund.eastmoney.com/f10/lsjz?fundCode={code}&pageIndex=1&pageSize=60'
+    p = os.path.join(RAW, 'qdii', f'lsjz_{code}.json')
+    st = STATUS['东财净值接口:' + code] = get(url, p, check=lambda t: 'LSJZList' in t, headers=(f'Referer: https://fundf10.eastmoney.com/jjjz_{code}.html',), src='eastmoney_lsjz')
+    if not os.path.exists(p): return {}, st
+    try: rows = json.load(open(p))['Data']['LSJZList'] or []
+    except Exception: return {}, st
+    out = {}
+    for r in rows:
+        try:
+            if r.get('FSRQ') and r.get('DWJZ') not in (None, ''): out[r['FSRQ']] = float(r['DWJZ'])
+        except (TypeError, ValueError): pass
+    return out, st
+
+def nav_sina(code):
+    url = f'https://stock.finance.sina.com.cn/fundInfo/api/openapi.php/CaihuiFundInfoService.getNav?symbol={code}&page=1'
+    p = os.path.join(RAW, 'qdii', f'sina_nav_{code}.json')
+    st = STATUS['新浪净值:' + code] = get(url, p, check=lambda t: 'jjjz' in t, src='sina')
+    if not os.path.exists(p): return {}, st
+    try: rows = json.load(open(p))['result']['data']['data'] or []
+    except Exception: return {}, st
+    out = {}
+    for r in rows:
+        try:
+            if r.get('fbrq') and r.get('jjjz') not in (None, ''): out[r['fbrq'][:10]] = float(r['jjjz'])
+        except (TypeError, ValueError): pass
+    return out, st
+
+def _fill_nav(code, nav, primary_ok):
+    """pingzhong 成功就用它。失败才用东财净值表，再失败用新浪。只补公布出来的单位净值。"""
+    if primary_ok: return nav, 'eastmoney'
+    extra, src = nav_lsjz(code)
+    if not extra:
+        extra, src = nav_sina(code)
+        src = 'sina' if extra else None
+    else:
+        src = 'eastmoney_lsjz'
+    if not extra: return nav, ('cache' if nav else None)
+    merged = dict(nav); merged.update(extra)
+    return merged, src
+
+def _extend_fund(old, code, idx, typ, name, scale, prices, nav, px_src, nav_src):
+    """在上一版序列后面，只追加「缓存里没有、且同一天有单位净值」的日子。不改旧溢价。"""
+    if old:
+        f = {k: v for k, v in old.items() if k != 'stale'}
+        for k in ('d', 'close', 'nav', 'prem', 'amt'): f[k] = list(old.get(k) or [])
+    else:
+        f = dict(code=code, name=name, idx=idx, type=typ, d=[], close=[], nav=[], prem=[], amt=[])
+    if name: f['name'] = name
+    f['idx'], f['type'] = idx, typ
+    if scale: f['scale'] = scale
+    have = set(f['d'])
+    for day, close, amount in prices:
+        if day in have or day not in nav or not nav[day]: continue
+        nv = nav[day]
+        f['d'].append(day); f['close'].append(close); f['nav'].append(nv)
+        f['prem'].append(round((close / nv - 1) * 100, 3))
+        f['amt'].append(round(amount / 1e8, 3) if amount else None)
+        have.add(day)
+    if f['d'] and f['d'] != sorted(f['d']):
+        rows = sorted(zip(f['d'], f['close'], f['nav'], f['prem'], f['amt']))
+        f['d'], f['close'], f['nav'], f['prem'], f['amt'] = [list(c) for c in zip(*rows)]
+    if prices:
+        last = prices[-1]
+        if last[2] is None and f.get('last_amt') is not None and f.get('last_close_date') and last[0] != f.get('last_close_date'):
+            f['last_amt_date'] = f.get('last_amt_date') or f['last_close_date']
+        f['last_close'], f['last_close_date'] = last[1], last[0]
+        if last[2] is not None:
+            f['last_amt'] = round(last[2] / 1e8, 3); f['last_amt_date'] = last[0]
+    if nav: f['nav_last_date'] = max(nav)
+    elif f.get('d'): f['nav_last_date'] = f['d'][-1]
+    f['px_src'], f['nav_src'] = px_src, nav_src
+    return f if f.get('d') else None
+
 def _pz(code):
     p = os.path.join(RAW, 'qdii', f'pz_{code}.js')
     st = STATUS[f'东方财富净值:{code}'] = get(f'https://fund.eastmoney.com/pingzhongdata/{code}.js', p, check=lambda t: 'Data_netWorthTrend' in t, src='eastmoney')
@@ -311,30 +415,52 @@ def build_qdii():
     funds = []; old = prev('qdii'); olds = {f['code']: f for f in old.get('funds', [])}; fresh = 0; stale = 0
     for code, idx, typ in QDII:
         secid = ('1.' if code.startswith('5') else '0.') + code
-        name, px, st = em_kline(secid, beg='20180101'); time.sleep(0.3)
-        z = _pz(code); time.sleep(0.3)
-        f = None
-        if px and z and z['nav']:
-            nav = z['nav']
+        name, px, st = em_kline(secid, beg='20180101')
+        if st == 'ok': time.sleep(0.2)
+        z = _pz(code)
+        if z and z.get('st') == 'ok': time.sleep(0.2)
+        primary_nav = bool(z and z.get('st') == 'ok' and z.get('nav'))
+        nav, nav_src = _fill_nav(code, dict(z['nav']) if z and z.get('nav') else {}, primary_nav)
+        scale = z.get('scale') if z else None
+        fname = (z or {}).get('name') or name
+        if st == 'ok' and px:
+            prices, px_src = list(px), 'eastmoney'
+        else:
+            prices = list(px or [])
+            tx, _ = tencent_kline(code)
+            have = {d for d, _, _ in prices}; added = 0
+            for day, close in tx:
+                if day not in have:
+                    prices.append((day, close, None)); have.add(day); added += 1
+            prices.sort()
+            px_src = 'tencent' if added else ('cache' if prices else None)
+        oldf = olds.get(code)
+        if px_src is None and oldf: px_src = oldf.get('px_src') or 'cache'
+        # 两边主源都成功：按原逻辑整段重算。否则只在上一版后面补同一天有净值的新收盘，不改旧溢价。
+        if px_src == 'eastmoney' and primary_nav:
             d, c, n, pr, amt = [], [], [], [], []
-            for day, close, amount in px:
-                if day < '2019-01-01' or day not in nav: continue
+            for day, close, amount in prices:
+                if day < '2019-01-01' or day not in nav or not nav[day]: continue
                 d.append(day); c.append(close); n.append(nav[day]); pr.append(round((close / nav[day] - 1) * 100, 3)); amt.append(round(amount / 1e8, 3))
-            if d:
-                last_px = px[-1]
-                f = dict(code=code, name=z['name'] or name, idx=idx, type=typ, d=d, close=c, nav=n, prem=pr, amt=amt,
-                         last_close=last_px[1], last_close_date=last_px[0], last_amt=round(last_px[2] / 1e8, 3),
-                         nav_last_date=max(nav), scale=z['scale'])
-        got = st == 'ok' and z and z['st'] == 'ok'
-        if f is None and code in olds:   # 这只基金这次没抓到、也没有缓存：沿用上一版 data/qdii.json
+            last_px = prices[-1]
+            f = dict(code=code, name=fname or name, idx=idx, type=typ, d=d, close=c, nav=n, prem=pr, amt=amt,
+                     last_close=last_px[1], last_close_date=last_px[0], last_amt=round(last_px[2] / 1e8, 3), last_amt_date=last_px[0],
+                     nav_last_date=max(nav), scale=scale, px_src='eastmoney', nav_src='eastmoney') if d else None
+        else:
+            f = _extend_fund(oldf, code, idx, typ, fname, scale, prices, nav, px_src, nav_src)
+        if f is None and code in olds:
             f = {k: v for k, v in olds[code].items() if k != 'stale'}
-        if not f: continue
-        # 这次没抓到（用的是缓存或上一版），而且场内收盘日早于最近一个美股交易日 → 标“未更新”
-        if not got and f['last_close_date'] < SESSION: f['stale'] = True; stale += 1
-        else: fresh += 1
+            f.setdefault('px_src', 'cache'); f.setdefault('nav_src', 'cache')
+        if not f or not f.get('d'): continue
+        moved = not oldf or f.get('last_close_date', '') > oldf.get('last_close_date', '')
+        got_px = px_src == 'eastmoney' or (px_src == 'tencent' and moved)
+        if not got_px and f.get('last_close_date') and f['last_close_date'] < SESSION:
+            f['stale'] = True; stale += 1
+        else:
+            f.pop('stale', None); fresh += 1
         funds.append(f)
     out = dict(funds=funds, generated=dt.datetime.now().strftime('%Y-%m-%d %H:%M'),
-               src='场内收盘价：东方财富行情接口（不复权）；单位净值：东方财富基金数据（pingzhongdata）。溢价 = 同一天的收盘价 ÷ 同一天的单位净值 − 1。')
+               src='场内收盘价：东方财富行情（不复权）。东方财富失败时，用腾讯行情未复权日线补原来没有的日期，不改旧收盘，盘中最后一根不当成收盘。单位净值：东方财富 pingzhongdata；失败时用东财净值表，再失败用新浪基金净值。溢价 = 同一天收盘价 ÷ 同一天单位净值 − 1。没有同一天的两边就不算。')
     if not fresh: out['generated'] = old.get('generated', out['generated'])
     return stamp(out, old, fresh > 0, stale, max((f['d'][-1] for f in funds), default=None))   # 数据截至 = 最新一个能算溢价的日子（净值日期）
 

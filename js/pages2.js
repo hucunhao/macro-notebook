@@ -118,12 +118,17 @@ const Pages2 = (() => {
     const secs = Object.entries(S.rows.reduce((a, r) => { (a[r.sec] = a[r.sec] || []).push(r); return a; }, {}));
     const pc = (rs, f) => { const ok = rs.filter(r => r[f] != null); return ok.length ? ok.filter(r => r[f]).length / ok.length : null; };
     const row = (nm, rs, cls='') => `<tr class="${cls}"><td>${nm}</td><td>${rs.length}</td><td style="${heat(pc(rs, 'a200') - .5, .5)}">${fpct(pc(rs, 'a200'), 0)}</td><td style="${heat(pc(rs, 'a50') - .5, .5)}">${fpct(pc(rs, 'a50'), 0)}</td><td>${rs.filter(r => r.hi52).length}</td><td>${rs.filter(r => r.lo52).length}</td></tr>`;
-    app.innerHTML = `<div class="mk-grid">
-      ${panel('', '标普 500 站上均线的比例', `截至 ${B.d[n]}：200 日线 ${B.p200[n]}%，50 日线 ${B.p50[n]}%`, `<div id="br-c"></div><div class="hint">${S.notes.surv} 只有约 ${Math.round(B.d.length/21)} 个月的历史（每只股票下载约 2 年日线，前 200 天用来算均线）。原来常说的“>70% 过热、极低时常见大底”是经验说法，这里没有检验。</div>`, '', 'full')}
+    app.innerHTML = `<div id="br-ma" style="margin-bottom:8px"><p class="hint">正在数 20 / 50 / 100 / 200 日均线…</p></div><div class="mk-grid">
+      ${panel('', '标普 500 站上均线的比例', `截至 ${B.d[n]}：200 日线 ${B.p200[n]}%，50 日线 ${B.p50[n]}%`, `<div id="br-c"></div><div class="hint">${S.notes.surv} 只有约 ${Math.round(B.d.length/21)} 个月的历史（每只股票下载约 2 年日线，前 200 天用来算均线）。上面的只数用同一套日线现算，多了 20 日和 100 日，以及最新一天的首次跌破、首次突破。原来常说的“>70% 过热、极低时常见大底”是经验说法，这里没有检验。这些数字不改概率桶。</div>`, '', 'full')}
       ${panel('', '各行业广度', '颜色：比例高于 50% 偏绿、低于 50% 偏红', `<table class="tbl-compact"><thead><tr><th>行业</th><th>公司数</th><th>站上 200 日线</th><th>站上 50 日线</th><th>52 周新高</th><th>52 周新低</th></tr></thead><tbody>${row('标普 500 全部', S.rows, 'base')}${secs.sort((a, b) => b[1].length - a[1].length).map(([s, rs]) => row(s, rs)).join('')}</tbody></table>`, '', 'full')}
     </div>`;
     Charts.line(U.$('#br-c'), { x: B.d.map(U.ts), ys: [B.p200, B.p50], labels: ['站上 200 日线 %', '站上 50 日线 %'], range: 'ALL', height: 260, minY: 0, maxY: 100, logToggle: false,
       hlines: [{ y:70, label:'70%', color:U.css('--y') }, { y:30, label:'30%', color:U.css('--y') }], fmt: v => v == null ? '—' : v.toFixed(1) + '%' });
+    const slot = U.$('#br-ma');
+    if (slot) Breadth.load().then(res => {
+      if (!slot.isConnected) return;
+      slot.innerHTML = res.data ? Breadth.html(res.data) : `<div class="nodata">均线只数暂缺：${U.esc(res.error || '')}。上面的 50 / 200 日比例仍是上次生成的。</div>`;
+    });
   }
 
   // ---------- RV 同业比较 ----------

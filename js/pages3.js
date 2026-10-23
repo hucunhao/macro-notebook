@@ -196,6 +196,7 @@ const Pages3 = (() => {
         <div class="chip"><div class="k">标普 500 · 中位溢价（${grp('标普500').length} 只）</div><div class="v ${lvl(U.median(grp('标普500'))).replace('rr', 'r')}">${fp(U.median(grp('标普500')), 1)}</div><div class="hint">最低 ${fp(Math.min(...grp('标普500')), 1)} · 最高 ${fp(Math.max(...grp('标普500')), 1)}</div></div>
         <div class="chip"><div class="k">净值日期</div><div class="v" style="font-size:18px">${navDate}</div><div class="hint">溢价按这一天的收盘价和净值算 ${U.info(PTIP)}</div></div>
         <div class="chip" style="flex:1;min-width:260px"><div class="k">一句话</div><div style="font-size:14px;margin-top:4px">溢价越高，买场内基金越吃亏。高溢价时可以考虑同一指数的<b>场外联接基金</b>（按净值申购，没有溢价，但可能限额）。</div></div></div>
+      <div id="qdii-exec-slot" style="margin:8px 0"></div>
       <div class="mk-grid">${panel('', '溢价一览', '点表头排序；勾选的基金画在下面左图', '<div id="q-t" class="tablewrap"></div>', '', 'full')}
         ${panel('', '溢价走势', '每天收盘溢价（%）', '<div class="fundsel" id="q-s"></div><div id="q-c"></div>')}
         ${panel('', '两组的中位溢价', '纳指 100 组 vs 标普 500 组（至少 3 只有数据的日子）', '<div id="q-g"></div>')}</div>`;
@@ -205,9 +206,9 @@ const Pages3 = (() => {
       const rows = [...R].sort((a, b) => (val(b, st.sort) ?? -99) - (val(a, st.sort) ?? -99));
       U.$('#q-t').innerHTML = `<table class="tbl-compact"><thead><tr><th>勾选</th><th>代码</th><th style="text-align:left">名称</th><th>跟踪</th>${cols.map(([k, n]) => `<th data-s="${k}" style="cursor:pointer">${n}${st.sort === k ? ' ▼' : ''}</th>`).join('')}<th>收盘价</th><th>净值</th></tr></thead><tbody>
         ${rows.map(r => `<tr class="${st.sel.includes(r.f.code) ? 'sel' : ''}"><td><input type="checkbox" data-c="${r.f.code}" ${st.sel.includes(r.f.code) ? 'checked' : ''} aria-label="画出 ${r.f.code}"></td><td><b>${r.f.code}</b>${r.f.stale ? U.staleTag() : ''}</td><td style="text-align:left;max-width:170px;overflow:hidden;text-overflow:ellipsis" title="${U.esc(r.f.name)}">${U.esc(r.f.name.replace(/[(（]QDII.*$/, ''))}</td><td>${r.f.idx}${r.f.type === 'LOF' ? ' LOF' : ''}</td>
-          <td><span class="prem ${lvl(r.prem)}">${fp(r.prem)}</span></td><td><span class="prem ${lvl(r.a20)}">${fp(r.a20)}</span></td><td>${fp(r.hi60, 1)}</td><td>${fp(r.lo60, 1)}</td><td>${r.f.last_amt.toFixed(2)}</td><td>${r.f.scale ? r.f.scale.v.toFixed(0) : '—'}</td>
+          <td><span class="prem ${lvl(r.prem)}">${fp(r.prem)}</span></td><td><span class="prem ${lvl(r.a20)}">${fp(r.a20)}</span></td><td>${fp(r.hi60, 1)}</td><td>${fp(r.lo60, 1)}</td><td>${r.f.last_amt == null ? '—' : r.f.last_amt.toFixed(2)}</td><td>${r.f.scale ? r.f.scale.v.toFixed(0) : '—'}</td>
           <td>${U.last(r.f.close).toFixed(3)}</td><td>${U.last(r.f.nav).toFixed(4)}</td></tr>`).join('')}</tbody></table>
-        <div class="hint">溢价、收盘价、净值都是 ${navDate} 这一天的。成交额是最近一个交易日（${F[0].last_close_date}）；规模是季报数据（${F[0].scale ? F[0].scale.date : '—'}）。成交额太小的基金买卖价差大。</div>`;
+        <div class="hint">溢价、收盘价、净值都是各自溢价日的（最新能配对的一天是 ${navDate}）。成交额是最近一个有成交额的交易日（${F[0].last_amt_date || F[0].last_close_date}）；备用收盘没有成交额时不填 0。规模是季报数据（${F[0].scale ? F[0].scale.date : '—'}）。成交额太小的基金买卖价差大。执行层（溢价和指数档位）在上面，没有溢价时不暗示该加仓。</div>`;
       U.$$('#q-t th[data-s]').forEach(th => th.onclick = () => { st.sort = th.dataset.s; U.store.set('ms_qdii', st); table(); });
       U.$$('#q-t input[data-c]').forEach(c => c.onchange = () => { const k = c.dataset.c; st.sel = c.checked ? [...st.sel, k] : st.sel.filter(x => x !== k); U.store.set('ms_qdii', st); table(); chart(); });
     }
@@ -228,6 +229,8 @@ const Pages3 = (() => {
         hlines: [{ y:3, color:U.css('--y') }, { y:5 }, { y:10 }, { y:0, color:U.css('--ink3'), dash:false }], axisFmt: v => v.toFixed(0) + '%', fmt: v => v == null ? '—' : fp(v) });
     }
     table(); chart(); groups();
+    const slot = U.$('#qdii-exec-slot');
+    if (slot) QdiiExec.mount(slot, Observe.compute(Settings.get()).tiers);
   }
   return { world, cmdty, cal, ern, seas, qdii };
 })();
