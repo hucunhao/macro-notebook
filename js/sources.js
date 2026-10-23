@@ -5,6 +5,9 @@ const Sources = (() => {
     const rows = Object.entries(S).sort((a, b) => (a[1].group || '').localeCompare(b[1].group || ''));
     const age = s => { const y = (U.ts(s.end) - U.ts(s.start)) / (365.25*86400); return y; };
     app.innerHTML = `<h1>数据来源</h1>
+      <h2>书面规则</h2>
+      <div class="card"><p style="margin-top:0">可审计一页的触发、概率和档位，以这份文件为准：<a href="rules/bear_dashboard_definitions.md">rules/bear_dashboard_definitions.md</a></p>
+      <p class="small muted" style="margin-bottom:0">页上「是/否」句式见 <a href="rules/ui_copy_audit_page.md">rules/ui_copy_audit_page.md</a>（investor 2026-10-24）。数字门槛在「门槛设置」，默认与书面定义一致。</p></div>
       <p class="muted small">数据由 <code>update_data.py</code> 脚本下载并写进 <code>data/</code> 文件夹（浏览器不能直接从这些网站取数据）。本次生成：${MS.meta.generated}（台北时间）。“长度”少于 5 年的标黄。</p>
       <div class="card tablewrap"><table><thead><tr><th>指标</th><th>来源</th><th>开始</th><th>最新</th><th>长度</th><th>说明</th></tr></thead><tbody>
       ${rows.map(([k, s]) => { const y = age(s); return `<tr><td>${s.name}</td><td style="text-align:left"><a href="${s.url}" target="_blank" rel="noopener">${s.source}</a></td><td>${s.start}</td><td>${s.end}</td><td>${y < 5 ? `<span class="tag warn">${y.toFixed(1)} 年</span>` : y.toFixed(0) + ' 年'}</td><td style="text-align:left;white-space:normal;min-width:220px">${s.note || ''}</td></tr>`; }).join('')}
