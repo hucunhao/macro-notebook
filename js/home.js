@@ -237,7 +237,13 @@ const Home = (() => {
   }
 
   // ---------- 点开：放大图 ----------
-  const WARN_NAMES = ['① 信用：高收益债利差高于 3.5%，而且投资级债利差 3 个月上升超过 0.2 个百分点', '② 美联储还在加息周期，而且核心通胀比 3 个月前更高', '③ 油价连续 2 个月比去年同期涨 50% 以上，而且创 52 周新高', '④ AI 相关公司的借债压力在扩散（你手动判断）'];
+  // 短名 + 书面成立句。页上「是/否」句在可审计一页，不在这里另写一套。
+  const WARN_NAMES = [
+    '① 信用利差：HY OAS（FRED BAMLH0A0HYM2）> 350bp，并且 IG OAS（FRED BAMLC0A0CM）过去 63 个交易日变化 > +20bp',
+    '② 核心通胀再加速：美联储最近一次调整是加息，且在过去 9 个月内；未季调核心 CPI 同比（官方一位小数）比 3 个月前高 ≥ 0.1 个百分点',
+    '③ 油价冲击：WTI 现货（FRED DCOILWTICO）月均价同比，对最近 2 个完整日历月均 > +50%（当月 MTD 可展示，不计入）；过去 20 个交易日内，WTI 现货日收盘创 52 周新高',
+    '④ AI 信用扩散：AI 相关信用压力已从 CoreWeave 等扩散到更多发债主体',
+  ];
   function warnHTML(C){
     return `<div class="${C.nLive >= 2 ? 'split-alert' : 'split-note'}">成立 ${C.nLive} 条：${C.nLive >= 2 ? '<b>每档加仓拆成两半，间隔 4 周买</b>' : '不到 2 条，碰到某一档时一次买完这一档'}</div>
       ${WARN_NAMES.map((t, i) => { const x = C.trig[i]; const l = x.live == null ? 'n' : x.live ? 'r' : 'g'; return `<div class="trig"><span class="light ${l}"></span><div><b>${t}</b>　${x.live == null ? '暂无数据' : x.live ? '成立' : '不成立'}<br><span class="small muted">${x.text}</span></div></div>`; }).join('')}`;

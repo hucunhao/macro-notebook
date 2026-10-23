@@ -45,6 +45,9 @@ const Settings = (() => {
   ];
   const DEF = {}; GROUPS.forEach(g => g[1].forEach(r => DEF[r[0]] = r[2]));
   DEF.ai_stress = true; DEF.ai_note = '';
+  DEF.ai_cds = ''; DEF.ai_cds_date = ''; DEF.ai_cds_src = '';
+  DEF.ai_bond = ''; DEF.ai_bond_date = ''; DEF.ai_bond_src = '';
+  DEF.ai_side = '';
   // 设置版本号：默认值改了就升级版本，旧版本保存的设置作废，避免覆盖新默认值
   const KEY = 'ms_settings_v2';
   try { localStorage.removeItem('ms_settings'); } catch(e){}
@@ -63,10 +66,21 @@ const Settings = (() => {
       <p class="muted small">这一条没有现成的数据，只能你自己根据新闻判断（比如 AI 公司借债出问题、相关债券和贷款大跌）。<br><b>关掉的条件：</b>${AI_OFF}</p>
       <div class="setrow"><span>我认为正在扩散</span><input type="checkbox" id="ai-stress" ${cur.ai_stress ? 'checked' : ''}></div>
       <div class="setrow" style="display:block"><span>依据（写给自己看）</span><br><input type="text" id="ai-note" style="width:100%" value="${U.esc(cur.ai_note)}"></div>
+      <p class="muted small">证据栏（与「可审计一页」同一份记录）。改为否须同时：甲骨文 5 年 CDS &lt; 200bp（来源+时间戳），且数据中心项目债回到面值附近。旁证不能单独翻转④。</p>
+      <div class="setrow"><span>甲骨文 5 年 CDS（bp）</span><input type="number" step="any" id="ai-cds" value="${cur.ai_cds === '' || cur.ai_cds == null ? '' : cur.ai_cds}"></div>
+      <div class="setrow"><span>CDS 日期</span><input type="text" id="ai-cds-date" value="${U.esc(cur.ai_cds_date || '')}"></div>
+      <div class="setrow"><span>CDS 来源</span><input type="text" id="ai-cds-src" value="${U.esc(cur.ai_cds_src || '')}"></div>
+      <div class="setrow"><span>数据中心项目债（价格或利差）</span><input type="text" id="ai-bond" value="${U.esc(cur.ai_bond || '')}"></div>
+      <div class="setrow"><span>项目债日期</span><input type="text" id="ai-bond-date" value="${U.esc(cur.ai_bond_date || '')}"></div>
+      <div class="setrow"><span>项目债来源</span><input type="text" id="ai-bond-src" value="${U.esc(cur.ai_bond_src || '')}"></div>
+      <div class="setrow" style="display:block"><span>旁证（如 Meta 负 FCF、新股融资；不能单独翻转④）</span><br><input type="text" id="ai-side" style="width:100%" value="${U.esc(cur.ai_side || '')}"></div>
       <p style="margin-top:16px"><button class="btn" id="set-reset">恢复默认</button></p>`;
     U.$$('input[data-k]', p).forEach(inp => inp.addEventListener('change', () => { const v = parseFloat(inp.value); if (!isNaN(v)){ cur[inp.dataset.k] = v; save(); } }));
     U.$('#ai-stress', p).onchange = e => { cur.ai_stress = e.target.checked; save(); };
     U.$('#ai-note', p).onchange = e => { cur.ai_note = e.target.value; save(); };
+    const textKey = { 'ai-cds-date':'ai_cds_date', 'ai-cds-src':'ai_cds_src', 'ai-bond':'ai_bond', 'ai-bond-date':'ai_bond_date', 'ai-bond-src':'ai_bond_src', 'ai-side':'ai_side' };
+    Object.entries(textKey).forEach(([id, k]) => { U.$('#' + id, p).onchange = e => { cur[k] = e.target.value; save(); }; });
+    U.$('#ai-cds', p).onchange = e => { const v = e.target.value.trim(); cur.ai_cds = v === '' || isNaN(+v) ? '' : +v; save(); };
     U.$('#set-close', p).onclick = close;
     U.$('#set-reset', p).onclick = () => { cur = Object.assign({}, DEF); save(); render(); };
   }

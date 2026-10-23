@@ -65,9 +65,14 @@ const Observe = (() => {
     const diagTxt = diag.rows[2] ? '跨资产：黄金和收益率同涨，最接近危险，盯紧信用。' : diag.rows[1] ? '跨资产：美元大涨同时股票下跌，像全球流动性收缩。' : diag.rows[0] ? '跨资产：收益率升、股票跌，属于纯杀估值，可逆。' : '跨资产：过去 1 个月没有对上诊断表里的任何一种病因。';
     // 放慢加仓的 4 条预警
     const igv = lastv('IG_OAS');
-    const t1 = hy != null && ig3m != null ? { live: hy > T.hy_line && ig3m > T.ig_widen, text: `HY OAS ${hy.toFixed(0)}bp（${lastd('HY_OAS')}，要 >${T.hy_line}bp）；IG OAS 63 个交易日变化 ${U.sgn(ig3m,0,'bp')}（${U.ser('IG_OAS').d[U.ser('IG_OAS').d.length-64]} → ${lastd('IG_OAS')}，要 >+${T.ig_widen}bp）` } : { live: null, text: '暂无数据' };
+    const igS = U.ser('IG_OAS');
+    const t1 = hy != null && ig3m != null ? {
+      live: hy > T.hy_line && ig3m > T.ig_widen,
+      text: `HY OAS ${hy.toFixed(0)}bp（${lastd('HY_OAS')}，要 >${T.hy_line}bp）；IG OAS 63 个交易日变化 ${U.sgn(ig3m,0,'bp')}（${igS.d[igS.d.length-64]} → ${lastd('IG_OAS')}，要 >+${T.ig_widen}bp）`,
+      detail: { hy, hyDate: lastd('HY_OAS'), ig: igv, igDate: lastd('IG_OAS'), ig3m, igFrom: igS.d[igS.d.length-64], igFromV: igS.v[igS.v.length-64], hyLine: T.hy_line, igWiden: T.ig_widen },
+    } : { live: null, text: '暂无数据', detail: null };
     const fs = U.ser('FEDU'), cs = U.ser('CORECPI_YOY');
-    let t2 = { live: null, text: '暂无数据' };
+    let t2 = { live: null, text: '暂无数据', detail: null };
     if (fs && cs){
       // 最近一次调整是加息，并且发生在最近 fed_months 个月内（加息后暂停仍算加息周期）
       const n = fs.v.length, fedNow = fs.v[n-1]; let k = n-1; while (k > 0 && fs.v[k-1] === fs.v[k]) k--;
@@ -84,10 +89,12 @@ const Observe = (() => {
       const cNow = ns ? r1(U.last(ns.v)) : null, cPrev = pi >= 0 ? r1(ns.v[pi]) : null;
       const rising = cNow != null && cPrev != null && cNow - cPrev >= 0.1 - 1e-9;
       const annTxt = an ? `${U.last(an.v).toFixed(2)}%（${U.last(an.d).slice(0,7)}）` : '暂无数据';
-      t2 = { live: hiking && rising, text: `联储目标上限 ${fedNow.toFixed(2)}%；最近一次调整：${lastChg ? `${lastChg.date} 从 ${lastChg.from.toFixed(2)}% ${lastChg.to > lastChg.from ? '加息' : '降息'}到 ${lastChg.to.toFixed(2)}%` : '无'}（${hiking ? `是加息，且在最近 ${T.fed_months} 个月内` : `不满足“最近 ${T.fed_months} 个月内的加息”`}）。<br>核心 CPI 同比（BLS 口径，未季调，1 位小数）：${ld ? ld.slice(0,7) : '—'} <b>${cNow == null ? '—' : cNow.toFixed(1)}%</b>，3 个月前 ${pd ? pd.slice(0,7) : '—'} <b>${cPrev == null ? '—' : cPrev.toFixed(1)}%</b>（要至少高 0.1 个百分点：${rising ? '是' : '否'}）。<br>3 个月年化核心 CPI（季调）：${annTxt}（不计入触发条件）` };
+      const diff = (cNow != null && cPrev != null) ? Math.round((cNow - cPrev) * 10 + 1e-9) / 10 : null;
+      t2 = { live: hiking && rising, text: `联储目标上限 ${fedNow.toFixed(2)}%；最近一次调整：${lastChg ? `${lastChg.date} 从 ${lastChg.from.toFixed(2)}% ${lastChg.to > lastChg.from ? '加息' : '降息'}到 ${lastChg.to.toFixed(2)}%` : '无'}（${hiking ? `是加息，且在最近 ${T.fed_months} 个月内` : `不满足“最近 ${T.fed_months} 个月内的加息”`}）。<br>核心 CPI 同比（BLS 口径，未季调，1 位小数）：${ld ? ld.slice(0,7) : '—'} <b>${cNow == null ? '—' : cNow.toFixed(1)}%</b>，3 个月前 ${pd ? pd.slice(0,7) : '—'} <b>${cPrev == null ? '—' : cPrev.toFixed(1)}%</b>（要至少高 0.1 个百分点：${rising ? '是' : '否'}）。<br>3 个月年化核心 CPI（季调）：${annTxt}（不计入触发条件）`,
+        detail: { fedNow, fedDate: U.last(fs.d), lastChg, hiking, fedMonths: T.fed_months, cNow, cPrev, cDate: ld, pDate: pd, diff, rising, ann: an ? U.last(an.v) : null, annDate: an ? U.last(an.d) : null } };
     }
     const ws = U.ser('WTI');
-    let t3 = { live: null, text: '暂无数据' };
+    let t3 = { live: null, text: '暂无数据', detail: null };
     if (ws){
       // 月均价：每个月所有交易日收盘的平均；只用已经结束的月份
       const mon = {}; ws.d.forEach((d, i) => { const k = d.slice(0,7); (mon[k] = mon[k] || []).push(ws.v[i]); });
@@ -100,9 +107,10 @@ const Observe = (() => {
       const n = ws.v.length, w252 = ws.v.slice(n-252), max252 = Math.max(...w252), max20 = Math.max(...ws.v.slice(n-20));
       const hiDate = ws.d[n-252 + w252.indexOf(max252)];
       const newHigh = max20 >= max252;
-      t3 = { live: both && newHigh, text: `WTI 现货月均价同比（对比去年同月月均）：${last2.map(x => `${x.m} ${U.sgn(x.y*100,1,'%')}`).join('，')}（最近 2 个完整月份都要 >+${T.oil_yoy}%：${both ? '是' : '否'}）；${curM} 月初至今 ${mtd == null ? '—' : U.sgn(mtd*100,1,'%')}（只做参考，${mon[curM].length} 个交易日）。<br>日度收盘：52 周最高 ${max252.toFixed(2)}（${hiDate}），最近 20 个交易日最高 ${max20.toFixed(2)}（${newHigh ? '创了新高' : '没创新高'}）。数据：FRED DCOILWTICO（WTI 现货，库欣），最新 ${U.last(ws.d)}` };
+      t3 = { live: both && newHigh, text: `WTI 现货月均价同比（对比去年同月月均）：${last2.map(x => `${x.m} ${U.sgn(x.y*100,1,'%')}`).join('，')}（最近 2 个完整月份都要 >+${T.oil_yoy}%：${both ? '是' : '否'}）；${curM} 月初至今 ${mtd == null ? '—' : U.sgn(mtd*100,1,'%')}（只做参考，${mon[curM].length} 个交易日）。<br>日度收盘：52 周最高 ${max252.toFixed(2)}（${hiDate}），最近 20 个交易日最高 ${max20.toFixed(2)}（${newHigh ? '创了新高' : '没创新高'}）。数据：FRED DCOILWTICO（WTI 现货，库欣），最新 ${U.last(ws.d)}`,
+        detail: { last2, both, mtd, curM, mtdDays: mon[curM].length, max252, hiDate, max20, newHigh, last: U.last(ws.v), lastDate: U.last(ws.d), oilYoy: T.oil_yoy } };
     }
-    const t4 = { live: !!T.ai_stress, text: (T.ai_stress ? `手动判断：正在扩散。${T.ai_note ? '依据：' + T.ai_note + '。' : ''}` : '手动判断：没有扩散。') + `关掉的条件：${AI_OFF}（在门槛设置里切换）`, manual: true };
+    const t4 = { live: !!T.ai_stress, text: (T.ai_stress ? `手动判断：正在扩散。${T.ai_note ? '依据：' + T.ai_note + '。' : ''}` : '手动判断：没有扩散。') + `关掉的条件：${AI_OFF}（在门槛设置里切换）`, manual: true, detail: { manual: true } };
     const trig = [t1, t2, t3, t4]; const nLive = trig.filter(t => t.live).length;
     // 分档
     function tier(id, ts){
