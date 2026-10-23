@@ -17,8 +17,8 @@ OFFLINE = '--offline' in sys.argv
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
 # 诚实的请求头：说明这是个人研究脚本，不伪装成浏览器
 HUA = "macro-notebook/1.0 (personal research script)"
-# CNN 只接受浏览器样式的请求头。按“不伪装浏览器绕过拦截”的约定，默认不抓 CNN，沿用上次文件；
-# 只有手动设置环境变量 MS_CNN_BROWSER_UA=1 才会按旧方式抓取。
+# CNN 对非浏览器 UA 直接回 418（I'm a teapot）。按“不伪装浏览器绕过拦截”的约定，默认不抓 CNN，沿用上次文件；
+# 只有手动设置环境变量 MS_CNN_BROWSER_UA=1 才会按旧方式抓取（工作流默认不设）。
 CNN_BROWSER_UA = os.environ.get('MS_CNN_BROWSER_UA') == '1'
 TODAY = dt.date.today()
 # 课程结果 markdown 写到哪里：本机是 /workspace/quant_course；在 GitHub Actions 等别的机器上写到 content/results
@@ -78,7 +78,7 @@ def us_session(now=None):
 
 # ---------------------------------------------------------------- 1. 抓取
 FRED = ['BAA10Y','AAA10Y','BAMLH0A0HYM2','BAMLH0A3HYC','BAMLH0A1HYBB','BAMLH0A2HYB','BAMLC0A0CM','BAMLC0A4CBBB',
-        'DGS10','DGS2','DGS30','DGS3MO','T10Y2Y','T10Y3M','DFII10','T10YIE','VIXCLS','NASDAQCOM','NASDAQ100',
+        'DGS10','DGS2','DGS30','DGS3MO','T10Y2Y','T10Y3M','DFII10','T10YIE','VIXCLS','NASDAQCOM','NASDAQ100','SP500',
         'DTWEXBGS','DCOILWTICO','DCOILBRENTEU','CPILFESL','CPILFENS','DTB3','PCEPILFE','DFEDTARU','DFEDTARL','DEXCHUS','DEXUSEU','DEXJPUS']
 ETFS = ['SPY','QQQ','RSP','IWM','HYG','JNK','LQD','GLD','TLT','UUP','USO','EEM','FXI','VGK']
 # 标普 11 个行业 SPDR ETF（市场页用）
@@ -99,9 +99,10 @@ def fetch_all():
         for typ, nm in (('daily_treasury_yield_curve','par'),('daily_treasury_real_yield_curve','real')):
             p = os.path.join(RAW,'treasury',f'treasury_{nm}_yields_{yr}.csv')
             STATUS[f'Treasury:{nm}{yr}'] = fetch(f'https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{yr}/all?type={typ}&field_tdr_date_value={yr}&page&_format=csv', p, check=lambda t: t.startswith('Date'), ua=HUA, src='treasury')
-    STATUS['Cboe:SPX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/SPX_History.csv', os.path.join(RAW,'other','cboe_SPX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA, src='cboe')
-    STATUS['Cboe:VVIX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/VVIX_History.csv', os.path.join(RAW,'other','cboe_VVIX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA, src='cboe')
-    STATUS['Cboe:VIX'] = fetch('https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv', os.path.join(RAW,'other','cboe_VIX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA, src='cboe')
+    # 直接打 cdn-api.cboe.com（cdn.cboe.com 会 307 跳转）；官方日线有时比收盘晚几个小时才挂上
+    STATUS['Cboe:SPX'] = fetch('https://cdn-api.cboe.com/api/global/us_indices/daily_prices/SPX_History.csv', os.path.join(RAW,'other','cboe_SPX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA, src='cboe')
+    STATUS['Cboe:VVIX'] = fetch('https://cdn-api.cboe.com/api/global/us_indices/daily_prices/VVIX_History.csv', os.path.join(RAW,'other','cboe_VVIX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA, src='cboe')
+    STATUS['Cboe:VIX'] = fetch('https://cdn-api.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv', os.path.join(RAW,'other','cboe_VIX.csv'), check=lambda t: t.startswith('DATE'), ua=HUA, src='cboe')
     frm = (TODAY - dt.timedelta(days=3700)).isoformat()
     for t in ETFS + [x for x,_ in SECTORS]:
         STATUS['Nasdaq:'+t] = fetch(f'https://api.nasdaq.com/api/quote/{t}/historical?assetclass=etf&fromdate={frm}&todate={TODAY}&limit=99999',
@@ -148,6 +149,13 @@ def merge(base, extra):
     d = dict(base); 
     for k,v in extra.items():
         if k not in d: d[k] = v
+    return sorted(d.items())
+def merge_series(*series_list):
+    """多来源日线按日期合并：同一天以后出现的值为准（用来补 Cboe / FRED 谁先挂上收盘价）。"""
+    d = {}
+    for ser in series_list:
+        for day, val in ser:
+            d[day] = val
     return sorted(d.items())
 def ratio(a, b):
     db = dict(b); return [(d, x/db[d]) for d,x in a if d in db]
@@ -204,13 +212,13 @@ def build_series():
         if p in sa: ann.append((d, ((sa[d]/sa[p])**4 - 1)*100))
     add('CORECPI_3M_ANN','核心 CPI 3 个月年化（季调）','%', ann, F, fu('CPILFESL'), '季调指数 3 个月变化的 4 次方年化，只做展示。', 'macro', nd=6)
     add('CORECPI_YOY','核心 CPI 同比','%', [(d, v) for d,v in yoy(cpi, 365)], F, fu('CPILFESL'), '月度数据，按同比计算（保留 6 位小数，先行条件②要比大小）。', 'macro', nd=6)
-    # equities
-    spx = read_mdY(os.path.join(RAW,'other','cboe_SPX.csv'), 'SPX')
-    add('SPX','标普 500 指数','点', spx, 'Cboe 官方历史', 'https://cdn.cboe.com/api/global/us_indices/daily_prices/SPX_History.csv', '价格指数，不含分红。', 'equity', start_cut='1975-01-01')
-    add('NDX','纳斯达克 100 指数','点', read_fred('NASDAQ100'), F, fu('NASDAQ100'), '价格指数，不含分红。1986 年起。', 'equity', start_cut='1986-01-01')
+    # equities：Cboe 与 FRED 谁先挂上当日收盘就用谁（早间定时常见 Cboe/FRED 还差一天）
+    spx = merge_series(read_mdY(os.path.join(RAW,'other','cboe_SPX.csv'), 'SPX'), read_fred('SP500'))
+    add('SPX','标普 500 指数','点', spx, 'Cboe 官方历史 + FRED SP500', 'https://cdn-api.cboe.com/api/global/us_indices/daily_prices/SPX_History.csv', '价格指数，不含分红。优先用 Cboe；FRED SP500 用来补晚挂的那天。', 'equity', start_cut='1975-01-01')
+    add('NDX','纳斯达克 100 指数','点', read_fred('NASDAQ100'), F, fu('NASDAQ100'), '价格指数，不含分红。1986 年起。FRED 有时比收盘晚几个小时才更新。', 'equity', start_cut='1986-01-01')
     add('COMP','纳斯达克综合指数','点', read_fred('NASDAQCOM'), F, fu('NASDAQCOM'), '', 'equity')
-    vix = read_mdY(os.path.join(RAW,'other','cboe_VIX.csv'), 'CLOSE')
-    add('VIX','VIX 恐慌指数','点', vix, 'Cboe 官方历史', 'https://www.cboe.com/tradable_products/vix/vix_historical_data/', '', 'equity')
+    vix = merge_series(read_mdY(os.path.join(RAW,'other','cboe_VIX.csv'), 'CLOSE'), read_fred('VIXCLS'))
+    add('VIX','VIX 恐慌指数','点', vix, 'Cboe 官方历史 + FRED VIXCLS', 'https://www.cboe.com/tradable_products/vix/vix_historical_data/', '优先用 Cboe；FRED VIXCLS 用来补晚挂的那天。', 'equity')
     vv = read_mdY(os.path.join(RAW,'other','cboe_VVIX.csv'), 'VVIX')
     if vv: add('VVIX','VVIX（VIX 的波动）','点', vv, 'Cboe 官方历史', 'https://www.cboe.com/us/indices/dashboard/vvix/', '2006 年起。', 'equity')
     E = {t: read_nasdaq(t) for t in ETFS}
@@ -258,10 +266,25 @@ def build_series():
         print('CNN parse failed', e)
     manual = json.load(open(os.path.join(ROOT,'manual_values.json'))) if os.path.exists(os.path.join(ROOT,'manual_values.json')) else {}
     core_status = {k: STATUS.get(k, 'cached' if OFFLINE else 'missing') for k in CORE_SOURCES}
+    session = us_session()
+    # 文件抓到了、但日线还停在上一交易日（来源晚挂收盘价）→ 不算“核心齐全”。
+    # 这样 already_updated 不会跳过后面的备用定时，等 Cboe/FRED 挂上后再跑一次。
+    lag = []
+    for sid, src_key in (('SPX','Cboe:SPX'), ('NDX','FRED:NASDAQ100'), ('VIX','Cboe:VIX')):
+        ser = S.get(sid) or {}
+        end = (ser.get('d') or [None])[-1]
+        if end and end < session:
+            lag.append(f'{sid}={end}')
+            if core_status.get(src_key) == 'ok':
+                core_status[src_key] = 'lagging'   # 抓成功但缺最近收盘
+    if lag:
+        STATUS['core_equity_lag'] = ','.join(lag)
+        print(f'警告：核心股指日线落后于最近已收盘交易日 {session}：' + ', '.join(lag))
     meta = dict(generated=dt.datetime.now().strftime('%Y-%m-%d %H:%M'), tz='台北时间', status=STATUS,
-                session=us_session(),                       # 这次运行时最近一个已收盘的美股交易日
+                session=session,                       # 这次运行时最近一个已收盘的美股交易日
                 core=core_status, core_series=CORE_SERIES,
-                core_ok=all(v == 'ok' for v in core_status.values()))   # 核心来源这次全部抓到新文件
+                core_ok=all(v == 'ok' for v in core_status.values()),   # 全部新抓且日线不落后
+                core_lag=lag)
     return dict(meta=meta, series=S, fg=fg, manual=manual)
 
 # ---------------------------------------------------------------- 2b. 市场页：收益率曲线 + 行业 ETF

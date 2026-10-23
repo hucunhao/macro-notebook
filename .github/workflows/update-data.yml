@@ -6,6 +6,7 @@ on:
   schedule:
     - cron: '30 22 * * 1-5'   # 主时间：UTC 22:30（周一到周五）= 台北时间周二到周六 06:30，美股收盘之后
     - cron: '45 23 * * 1-5'   # 备用：UTC 23:45 = 台北时间 07:45。GitHub 定时任务常常迟到或漏发；已经更新过就直接结束
+    - cron: '0 1 * * 2-6'     # 再备用：UTC 01:00 = 台北时间 09:00（周二到周六）。Cboe/FRED 早间常晚挂收盘价；这时再跑一次补齐
   workflow_dispatch: {}        # Actions 页面上的 “Run workflow” 按钮，手动跑一次（总是完整运行）
 
 permissions:

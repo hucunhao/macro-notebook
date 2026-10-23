@@ -27,7 +27,9 @@ TRIES = max(1, int(os.environ.get('MS_RETRIES', '3')))
 BACKOFF = (2, 6, 12)
 # 测试用：MS_SIMULATE_FAIL=eastmoney,fredcal,fomc,nasdaq 让这些来源“连不上”（不发请求，直接按失败处理）
 SIM_FAIL = {x.strip() for x in os.environ.get('MS_SIMULATE_FAIL', '').split(',') if x.strip()}
-# 同一个主机连续 3 个请求都彻底失败，就认定它今天连不上：后面的请求只试 1 次、超时缩短，免得整个任务被拖到超时
+# 同一个主机连续 3 个请求都彻底失败，就认定它今天连不上：后面的请求只试 1 次、超时缩短，免得整个任务被拖到超时。
+# 说明：GitHub Actions 跑在美国机房时，东方财富（push2his / fund.eastmoney）经常 403 或断连，几乎总会走进这条短路；
+# 这时沿用 raw/ 缓存和上一版 data/*.json（标 stale），不阻止发布。本机/非 GH 网络有时能抓到。
 _HOST_FAILS = {}
 
 def _host(url): return url.split('/')[2]
@@ -44,6 +46,8 @@ def get(url, path, timeout=40, check=None, headers=(), src=None):
     for i in range(tries):
         if i: time.sleep(BACKOFF[min(i - 1, len(BACKOFF) - 1)] + random.random())
         cmd = ['curl', '-sL', '--compressed', '--connect-timeout', '10', '-m', str(tmo), '-o', tmp, '-w', '%{http_code}', '-A', HUA]
+        # FRED 发布日历页在部分网络上 HTTP/2 会 INTERNAL_ERROR；fredcal 额外带 --http1.1
+        if src == 'fredcal': cmd[1:1] = ['--http1.1']
         for h in headers: cmd += ['-H', h]
         cmd.append(url)
         try: code = subprocess.run(cmd, capture_output=True, text=True, timeout=tmo + 10).stdout.strip()
