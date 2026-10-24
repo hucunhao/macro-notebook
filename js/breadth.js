@@ -80,14 +80,21 @@ const Breadth = (() => {
     }).catch(() => ({ error: '个股日线加载失败（data/sp500_hist.js）' }));
   }
 
-  function who(names, t){
+  // 裸代码，不猜交易所。TradingView 把 ?symbol=AAPL / JPM / COIN 解析到对应美股。
+  function tvChart(t){
+    return 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(t);
+  }
+  function who(names, t, link){
     const r = names[t];
     const nm = r && r.n ? r.n : '';
-    return `<span class="br-name"><b>${U.esc(t)}</b>${nm ? ' ' + U.esc(nm) : ''}</span>`;
+    const code = link
+      ? `<a href="${U.esc(tvChart(t))}" target="_blank" rel="noopener"><b>${U.esc(t)}</b></a>`
+      : `<b>${U.esc(t)}</b>`;
+    return `<span class="br-name">${code}${nm ? ' ' + U.esc(nm) : ''}</span>`;
   }
   function list(names, arr){
     if (!arr.length) return '<span class="muted">这一天没有</span>';
-    return arr.map(t => who(names, t)).join('');
+    return arr.map(t => who(names, t, true)).join('');
   }
   function pct(n, d){
     if (!d) return '—';
