@@ -57,10 +57,44 @@ const Audit = (() => {
     const p = (d.max252 && d.last != null) ? ((d.max252 - d.last) / d.max252 * 100) : null;
     return `否 — ${head}；距52周收盘高点还差约 ${p == null ? '—' : p.toFixed(1)}%（近20日未创新高）`;
   }
+  function blank(v){ return v == null || String(v).trim() === ''; }
+  function cdsLabel(T){
+    if (blank(T.ai_cds) || isNaN(+T.ai_cds)) return '暂缺';
+    return Math.round(+T.ai_cds) + 'bp';
+  }
+  // 成立句用页上原文。未成立且 CDS 或项目债空着时写「暂缺」，不要写成 0，也不要写成已经回到面值。
   function sent4(live, T){
     if (live) return COPY.on4;
-    const z = T.ai_cds === '' || T.ai_cds == null || isNaN(+T.ai_cds) ? '—' : Math.round(+T.ai_cds);
-    return `否 — CDS ${z}bp（退出线 200）且项目债近面值`;
+    const cdsEmpty = blank(T.ai_cds) || isNaN(+T.ai_cds);
+    const bondEmpty = blank(T.ai_bond);
+    if (!cdsEmpty && !bondEmpty) return `否 — CDS ${Math.round(+T.ai_cds)}bp（退出线 200）且项目债近面值`;
+    const z = cdsEmpty ? '暂缺' : Math.round(+T.ai_cds) + 'bp';
+    const b = bondEmpty ? '暂缺' : String(T.ai_bond).trim();
+    return `否 — CDS ${z}（退出线 200）；项目债 ${b}`;
+  }
+  function evSummary(T){
+    const g = v => blank(v) ? '暂缺' : String(v).trim();
+    return `CDS ${cdsLabel(T)}（日期 ${g(T.ai_cds_date)}，来源 ${g(T.ai_cds_src)}）；项目债 ${g(T.ai_bond)}（日期 ${g(T.ai_bond_date)}，来源 ${g(T.ai_bond_src)}）；旁证 ${g(T.ai_side)}。空着是暂缺，不当成 0。`;
+  }
+  function fredCreditHTML(){
+    const rows = [
+      ['HY_OAS', 'HY OAS', 'BAMLH0A0HYM2', v => Math.round(v) + 'bp'],
+      ['IG_OAS', 'IG OAS', 'BAMLC0A0CM', v => Math.round(v) + 'bp'],
+      ['CCC_OAS', 'CCC OAS', 'BAMLH0A3HYC', v => Math.round(v) + 'bp'],
+      ['BAA10Y', 'BAA10Y', 'BAA10Y', v => Math.round(v) + 'bp'],
+    ];
+    const bits = rows.map(([id, name, code, fmt]) => {
+      const s = U.ser(id);
+      const txt = s ? `${fmt(U.last(s.v))}（${U.last(s.d)}）` : '暂缺';
+      return `<span><b>${name}</b> ${txt} ${fred(code, id)}</span>`;
+    }).join('');
+    const real = U.ser('REAL10');
+    const realTxt = real ? `${U.last(real.v).toFixed(2)}%（${U.last(real.d)}）` : '暂缺';
+    return `<div class="audit-fred">
+      <p class="hint" style="margin:0"><b>信用旁证（FRED，不翻转④）</b>　旁证 / 不单独翻转④。这是全市场利差，不是甲骨文 CDS，也不是数据中心项目债。</p>
+      <div class="kv">${bits}</div>
+      <p class="hint" style="margin:6px 0 0">实际利率旁注（沿用已有 REAL10，不另拉一条）：10 年 TIPS ${realTxt} ${fred('DFII10', 'REAL10')}。不触发概率，不翻转④。</p>
+    </div>`;
   }
 
   function bucket(n){
@@ -179,19 +213,21 @@ const Audit = (() => {
       <p class="audit-sent">${U.esc(sent4(t[3].live, T))}</p>
       <p class="small">${COPY.exit4}</p>
       <div class="audit-ev">
-        <p class="hint" style="margin-top:0">证据栏。保存在本机门槛设置，和阈值同一处。二手盘中高点不得单独当作收盘事实。</p>
+        <p class="hint" style="margin-top:0">证据栏只展示，不改④开关。甲骨文 5 年 CDS 和数据中心项目债没有认可的免费自动源，数值手填在本机门槛设置。空着是暂缺，不会当成 0。二手盘中高点不得单独当作收盘事实。</p>
         <p class="hint">${COPY.side4}</p>
         <div class="setrow"><span>手动：我认为正在扩散</span><input type="checkbox" id="audit-ai" ${T.ai_stress ? 'checked' : ''}></div>
-        <div class="setrow" style="display:block"><span>依据</span><br><input type="text" id="audit-note" style="width:100%" value="${U.esc(T.ai_note || '')}"></div>
-        <div class="setrow"><span>CDS（bp）</span><input type="number" step="any" id="audit-cds" value="${T.ai_cds === '' || T.ai_cds == null ? '' : T.ai_cds}"></div>
-        <div class="setrow"><span>CDS 日期</span><input type="text" id="audit-cds-date" value="${U.esc(T.ai_cds_date || '')}"></div>
-        <div class="setrow"><span>CDS 来源</span><input type="text" id="audit-cds-src" value="${U.esc(T.ai_cds_src || '')}"></div>
-        <div class="setrow"><span>项目债价格或利差</span><input type="text" id="audit-bond" value="${U.esc(T.ai_bond || '')}"></div>
-        <div class="setrow"><span>项目债日期</span><input type="text" id="audit-bond-date" value="${U.esc(T.ai_bond_date || '')}"></div>
-        <div class="setrow"><span>项目债来源</span><input type="text" id="audit-bond-src" value="${U.esc(T.ai_bond_src || '')}"></div>
-        <div class="setrow" style="display:block"><span>旁证（不能单独翻转④）</span><br><input type="text" id="audit-side" style="width:100%" value="${U.esc(T.ai_side || '')}"></div>
+        <div class="setrow" style="display:block"><span>依据</span><br><input type="text" id="audit-note" style="width:100%" placeholder="暂缺" value="${U.esc(T.ai_note || '')}"></div>
+        <div class="setrow"><span>CDS（bp）</span><input type="number" step="any" id="audit-cds" placeholder="暂缺" value="${T.ai_cds === '' || T.ai_cds == null ? '' : T.ai_cds}"></div>
+        <div class="setrow"><span>CDS 日期</span><input type="text" id="audit-cds-date" placeholder="暂缺" value="${U.esc(T.ai_cds_date || '')}"></div>
+        <div class="setrow"><span>CDS 来源</span><input type="text" id="audit-cds-src" placeholder="暂缺" value="${U.esc(T.ai_cds_src || '')}"></div>
+        <div class="setrow"><span>项目债价格或利差</span><input type="text" id="audit-bond" placeholder="暂缺" value="${U.esc(T.ai_bond || '')}"></div>
+        <div class="setrow"><span>项目债日期</span><input type="text" id="audit-bond-date" placeholder="暂缺" value="${U.esc(T.ai_bond_date || '')}"></div>
+        <div class="setrow"><span>项目债来源</span><input type="text" id="audit-bond-src" placeholder="暂缺" value="${U.esc(T.ai_bond_src || '')}"></div>
+        <div class="setrow" style="display:block"><span>旁证（不能单独翻转④）</span><br><input type="text" id="audit-side" style="width:100%" placeholder="暂缺" value="${U.esc(T.ai_side || '')}"></div>
+        <p class="small" style="margin:8px 0 0">${U.esc(evSummary(T))}</p>
       </div>
-      <p class="hint">来源：手动记录，无自动序列。日期和来源填在上面。</p>
+      ${fredCreditHTML()}
+      <p class="hint">④的是/否只跟上面的手动勾选走。填 CDS、项目债或旁证不会自动翻转。</p>
     </div></section>`);
     return blocks.join('');
   }
@@ -208,19 +244,35 @@ const Audit = (() => {
     return `<tr><td>${name}<br><span class="muted small">${note}<br>${U.fmtNum(t.last, 2)}（${t.date}）</span></td><td>${U.fmtNum(t.high, 2)}<br><span class="muted small">${t.highDate}</span></td><td>${U.pct(t.dd)}</td>${t.tiers.map(x => tierCell(t, x)).join('')}</tr>`;
   }
 
+  function pressureBadge(on){
+    return on ? '<span class="badge r">确认压力↑</span>' : '<span class="badge g">未成立</span>';
+  }
+  function sahmCell(){
+    const s = U.ser('SAHM');
+    if (!s) return { badge: '<span class="badge n">暂缺</span>', cell: '暂缺。FRED SAHMREALTIME 这次没有进数据文件，不能把缺数写成未成立。' };
+    const v = U.last(s.v), d = U.last(s.d);
+    return { badge: pressureBadge(v > 0.3), cell: `${Number(v).toFixed(2)} 百分点（${d}）。来源 ${fred('SAHMREALTIME', 'SAHM')}。比的是实时指标本身，高于 0.3 才标确认压力↑。` };
+  }
+  function claimsCell(){
+    const s = U.ser('IC4W');
+    if (!s) return { badge: '<span class="badge n">暂缺</span>', cell: '暂缺。FRED IC4WSA（4 周均值）这次没有进数据文件。不用单周 ICSA 去比 23 万。' };
+    const v = U.last(s.v), d = U.last(s.d);
+    return { badge: pressureBadge(v > 230000), cell: `${U.fmtNum(v, 0)} 人（${d}）。来源 ${fred('IC4WSA', 'IC4W')}。这已是 4 周均值，高于 23 万才标确认压力↑；不用单周 ICSA。` };
+  }
   function confirmHTML(){
     const tr = trend();
     const trendCell = tr.kind === 'miss' ? '暂缺' : `${tr.d} 周收盘 ${U.fmtNum(tr.v, 2)}，200 日均线 ${U.fmtNum(tr.ma, 2)}，连续在线下 ${tr.streak} 周${tr.partial ? '（最近日期不是周五，当周可能未结束）' : ''}`;
     const trendBadge = tr.kind === 'up' ? '<span class="badge r">确认压力↑</span>' : tr.kind === 'miss' ? '<span class="badge n">暂缺</span>' : '<span class="badge g">未成立</span>';
+    const sahm = sahmCell(), ic = claimsCell();
     const rows = [
       ['趋势', '标普周线收盘跌破 200 日均线，且持续 ≥ 2 周', trendBadge, trendCell],
-      ['盈利', '盈利预期（FactSet 等）连续 4 周下修', '<span class="badge n">暂缺</span>', '暂缺。本站没有 FactSet 盈利预期序列。'],
-      ['就业 Sahm', 'Sahm Rule 实时指标 > 0.3', '<span class="badge n">暂缺</span>', '暂缺。本站没有这条序列。'],
-      ['初请', '初请失业金 4 周均值 > 23 万', '<span class="badge n">暂缺</span>', '暂缺。本站没有这条序列。'],
+      ['盈利', '盈利预期（FactSet 等）连续 4 周下修', '<span class="badge n">暂缺</span>', '暂缺。没有免费稳定的盈利预期序列，本期不自动拉。'],
+      ['就业 Sahm', 'Sahm Rule 实时指标 > 0.3', sahm.badge, sahm.cell],
+      ['初请', '初请失业金 4 周均值 > 23 万', ic.badge, ic.cell],
     ];
-    return `<section class="panel"><div class="ph"><span class="t">确认信号</span><span class="s">只读；只可上调风险认知，不可压低概率</span></div><div class="pb tablewrap"><table><thead><tr><th>信号</th><th>成立条件</th><th>读数</th><th>现在</th></tr></thead><tbody>
+    return `<section class="panel" id="audit-confirm"><div class="ph"><span class="t">确认信号</span><span class="s">只读；只可上调风险认知，不可压低概率</span></div><div class="pb tablewrap"><table><thead><tr><th>信号</th><th>成立条件</th><th>读数</th><th>现在</th></tr></thead><tbody>
       ${rows.map(r => `<tr><td>${r[0]}</td><td style="text-align:left;white-space:normal">${r[1]}</td><td>${r[2]}</td><td style="text-align:left;white-space:normal">${r[3]}</td></tr>`).join('')}
-    </tbody></table><p class="hint">未成立或暂缺时，概率桶保持不动。</p></div></section>`;
+    </tbody></table><p class="hint">未成立或暂缺时，概率桶保持不动。成立也只标注确认压力↑。</p></div></section>`;
   }
 
   function moodHTML(T){
@@ -249,6 +301,7 @@ const Audit = (() => {
   }
 
   function bindEvidence(){
+    // ④ 开关只写 ai_stress。CDS、项目债、旁证只留在证据栏，禁止用它们反推 on/off。
     const set = (k, v) => Settings.set(k, v);
     const on = (id, fn) => { const el = U.$('#' + id); if (el) el.onchange = fn; };
     on('audit-ai', e => set('ai_stress', e.target.checked));
@@ -280,7 +333,7 @@ const Audit = (() => {
       <div class="pg-h"><h1>可审计一页</h1><span class="s">规则和情绪放在同一页。数据截至美股 ${MS.meta.newest}</span>
         ${U.info(`<b>这一页怎么用</b><br>四条领先触发决定概率桶。确认信号和下面的情绪块都不能把概率往下调。<br>书面定义：<a href="${RULES}">${RULES}</a><br>页上句式：rules/ui_copy_audit_page.md（2026-10-24）。<br>数字门槛在右上角「门槛设置」，默认与书面定义一致。`, 'ⓘ 怎么读')}</div>
       ${bad.length ? `<div class="weak">门槛设置与书面数字不一致：${bad.map(U.esc).join('；')}。本页「是/否」按门槛设置计算；「成立」句仍是书面原文。</div>` : ''}
-      <p class="hint" style="margin-top:0">${COPY.rev23}。定义源 <a href="${RULES}">${RULES}</a></p>
+      <p class="hint" style="margin-top:0">${COPY.rev23}；2026-10-24（E 信用/AI 债务证据栏：自动化边界 + FRED 清单）。定义源 <a href="${RULES}">${RULES}</a></p>
       <div class="grid g2">${trigCards(C, T)}</div>
       <div class="grid g2" style="margin-top:8px">
         <section class="panel" id="audit-prob"><div class="ph"><span class="t">概率桶</span><span class="s">只由「是」的条数驱动</span><span class="r"><span class="badge ${n >= 2 ? 'r' : 'a'}">${n} / 4 为是</span></span></div><div class="pb">
