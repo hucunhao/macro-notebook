@@ -79,7 +79,9 @@ def us_session(now=None):
 # ---------------------------------------------------------------- 1. 抓取
 FRED = ['BAA10Y','AAA10Y','BAMLH0A0HYM2','BAMLH0A3HYC','BAMLH0A1HYBB','BAMLH0A2HYB','BAMLC0A0CM','BAMLC0A4CBBB',
         'DGS10','DGS2','DGS30','DGS3MO','T10Y2Y','T10Y3M','DFII10','T10YIE','VIXCLS','NASDAQCOM','NASDAQ100','SP500',
-        'DTWEXBGS','DCOILWTICO','DCOILBRENTEU','CPILFESL','CPILFENS','DTB3','PCEPILFE','DFEDTARU','DFEDTARL','DEXCHUS','DEXUSEU','DEXJPUS']
+        'DTWEXBGS','DCOILWTICO','DCOILBRENTEU','CPILFESL','CPILFENS','DTB3','PCEPILFE','DFEDTARU','DFEDTARL','DEXCHUS','DEXUSEU','DEXJPUS',
+        # 确认信号。不是核心来源：晚几天或抓失败不阻止发布。IC4WSA 已是 4 周均值，不要改去抓单周 ICSA。
+        'SAHMREALTIME','IC4WSA']
 ETFS = ['SPY','QQQ','RSP','IWM','HYG','JNK','LQD','GLD','TLT','UUP','USO','EEM','FXI','VGK']
 # 标普 11 个行业 SPDR ETF（市场页用）
 SECTORS = [('XLK','信息技术'),('XLC','通信服务'),('XLY','可选消费'),('XLF','金融'),('XLV','医疗保健'),('XLI','工业'),
@@ -212,6 +214,9 @@ def build_series():
         if p in sa: ann.append((d, ((sa[d]/sa[p])**4 - 1)*100))
     add('CORECPI_3M_ANN','核心 CPI 3 个月年化（季调）','%', ann, F, fu('CPILFESL'), '季调指数 3 个月变化的 4 次方年化，只做展示。', 'macro', nd=6)
     add('CORECPI_YOY','核心 CPI 同比','%', [(d, v) for d,v in yoy(cpi, 365)], F, fu('CPILFESL'), '月度数据，按同比计算（保留 6 位小数，先行条件②要比大小）。', 'macro', nd=6)
+    # 确认信号（就业）。读数已是规则要用的口径：Sahm 直接比 0.3；IC4WSA 直接比 23 万。不进 CORE_SOURCES。
+    add('SAHM','Sahm Rule 实时指标','百分点',read_fred('SAHMREALTIME'),F,fu('SAHMREALTIME'),'FRED SAHMREALTIME，已是 Sahm Rule 实时指标。确认信号：> 0.3 标确认压力↑，不改概率桶。','labor',nd=2)
+    add('IC4W','初请失业金 4 周均值','人',read_fred('IC4WSA'),F,fu('IC4WSA'),'FRED IC4WSA，已是初请失业金的 4 周移动平均（季调，人）。确认信号：> 23 万标确认压力↑。不要用单周 ICSA 比这个阈值。','labor',nd=0)
     # equities：Cboe 与 FRED 谁先挂上当日收盘就用谁（早间定时常见 Cboe/FRED 还差一天）
     spx = merge_series(read_mdY(os.path.join(RAW,'other','cboe_SPX.csv'), 'SPX'), read_fred('SP500'))
     add('SPX','标普 500 指数','点', spx, 'Cboe 官方历史 + FRED SP500', 'https://cdn-api.cboe.com/api/global/us_indices/daily_prices/SPX_History.csv', '价格指数，不含分红。优先用 Cboe；FRED SP500 用来补晚挂的那天。', 'equity', start_cut='1975-01-01')
