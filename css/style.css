@@ -333,3 +333,37 @@ canvas.bars{width:100%;display:block}
 .qdii-tiers{margin:4px 0 6px;padding-left:18px}
 .qdii-tiers li{margin:2px 0}
 tr.audit-on td{background:var(--accent-soft);font-weight:600}
+/* 早报 */
+.brief-kicker{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:2px 0 8px}
+.brief-kicker h1{margin:0;font-size:19px;color:var(--accent)}
+.brief-kicker .s{color:var(--ink3);font-size:12.5px}
+.brief-page{display:grid;grid-template-columns:minmax(0,760px) minmax(240px,320px);gap:14px;align-items:start;justify-content:space-between}
+.brief-body{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:22px 26px 32px;min-width:0}
+.brief-body h1{font-size:24px;line-height:1.35;margin:0 0 12px;color:var(--ink)}
+.brief-body h2{font-size:18px;margin:1.5em 0 .55em}
+.brief-body h3{font-size:15.5px;margin:1.25em 0 .4em;color:var(--ink)}
+.brief-body p{margin:.75em 0;font-size:15px;line-height:1.75}
+.brief-body ul,.brief-body ol{margin:.55em 0 .8em;padding-left:1.35em;font-size:15px;line-height:1.7}
+.brief-body li{margin:.28em 0}
+.brief-body hr{border:none;border-top:1px solid var(--line);margin:1.4em 0}
+.brief-body blockquote{margin:1em 0;padding:2px 0 2px 12px;border-left:3px solid var(--accent);color:var(--ink2)}
+.brief-body a{text-decoration:underline;text-underline-offset:2px}
+.brief-body code{font-family:var(--mono);font-size:.92em;background:var(--bg);padding:0 4px;border-radius:3px}
+.brief-body pre{background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;overflow:auto}
+.brief-body pre code{background:none;padding:0}
+.brief-body img{max-width:100%;height:auto}
+.brief-body .tablewrap{overflow-x:auto;margin:10px 0 16px;-webkit-overflow-scrolling:touch}
+.brief-body table{width:100%;margin:0}
+.brief-body th,.brief-body td{white-space:normal;text-align:left;vertical-align:top;line-height:1.5}
+.brief-side{position:sticky;top:52px;max-height:calc(100vh - 64px);overflow:auto;background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px 12px}
+.brief-side h2{font-size:13px;margin:0 0 4px;color:var(--ink2)}
+.brief-item{display:block;text-decoration:none;color:inherit;padding:7px 6px;border-top:1px solid var(--line)}
+.brief-item:hover{background:var(--panel2)}
+.brief-item.on{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.brief-item .d{font-family:var(--mono);font-size:12px;color:var(--accent)}
+.brief-item .s{display:block;font-size:12.5px;color:var(--ink2);line-height:1.45;margin-top:2px}
+@media (max-width:860px){
+  .brief-page{grid-template-columns:1fr}
+  .brief-side{position:static;max-height:none}
+  .brief-body{padding:16px 14px 22px}
+}
