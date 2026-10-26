@@ -11,11 +11,11 @@
     const h = location.hash.replace(/^#\/?/, '') || 'observe';
     let [r, a] = h.split('/');
     if (r === 'markets') r = 'mkt'; if (r === 'lrn') r = 'learn';
-    if (!['learn','notes','sources','mkt','world','fi','cr','cmd','cal','ern','qdii','seas','gp','val','hm','br','rv','all','audit'].includes(r)) r = 'observe';
+    if (!['learn','notes','sources','mkt','world','fi','cr','cmd','cal','ern','qdii','seas','gp','val','hm','br','rv','all','audit','brief'].includes(r)) r = 'observe';
     U.$$('#nav a').forEach(x => x.classList.toggle('on', x.dataset.r === r));
     U.$('#nav-more>button').classList.toggle('on', !!U.$(`#nav-more a[data-r="${r}"]`)); U.$('#nav-more').classList.remove('open');
     app.innerHTML = '';
-    app.classList.toggle('wide', !['learn','notes','sources'].includes(r));
+    app.classList.toggle('wide', !['learn','notes','sources','brief'].includes(r));
     window.scrollTo(0, 0);
     try {
       if (r === 'learn') app.innerHTML = `<div class="card" style="max-width:640px;margin:40px auto"><h1>学习内容搬家了</h1><p>第 1–3 周的课程和以后的新内容，都放到了单独的学习网站：</p><p><a class="btn primary" href="https://hucunhao.github.io/quant-learning/" target="_blank" rel="noopener">打开 Quant Learning ↗</a></p><p class="muted small">这个网站（Market Dashboard）只保留每天看盘用的面板。</p></div>`;
@@ -37,6 +37,7 @@
       else if (r === 'rv') Pages2.rv(app, a);
       else if (r === 'all') Observe.render(app);
       else if (r === 'audit') Audit.render(app);
+      else if (r === 'brief') Brief.render(app, a);
       else Home.render(app);
     } catch(e){ console.error(e); app.innerHTML = `<div class="nodata">页面出错：${U.esc(e.message)}</div>`; }
   }
@@ -52,7 +53,7 @@
   // 门槛改动后：观察页立即重算（保持滚动位置）
   Settings.onChange(() => { const h = location.hash; if (!h || h === '#' || h.startsWith('#/observe') || h.startsWith('#/all') || h.startsWith('#/audit')) { const y = scrollY; route(); scrollTo(0, y); } });
   // 跳转菜单：按 / 打开，输入筛选，回车跳转
-  const CMDS = [['AUDIT','可审计一页：规则和情绪','#/audit'],['HOME','总览','#/observe'],['US','美股：行情、行业、涨跌榜','#/mkt'],['WEI','全球股市：美欧日港 A 股','#/world'],['HM','热力图：标普 500 每只股票','#/hm'],
+  const CMDS = [['AUDIT','可审计一页：规则和情绪','#/audit'],['BRIEF','早报','#/brief'],['HOME','总览','#/observe'],['US','美股：行情、行业、涨跌榜','#/mkt'],['WEI','全球股市：美欧日港 A 股','#/world'],['HM','热力图：标普 500 每只股票','#/hm'],
     ['GC','利率曲线：各期限美债收益率、倒挂历史','#/fi'],['CR','信用：企业借钱的额外成本','#/cr'],['CMD','商品和汇率：黄金、原油、美元、人民币','#/cmd'],
     ['ECO','经济日历：CPI、非农、美联储会议','#/cal'],['ERN','财报日历：大公司哪天发财报','#/ern'],['QDII','QDII 溢价：纳指和标普场内基金','#/qdii'],['SEAS','季节性：每个月历史上涨跌','#/seas'],
     ['GP','技术和相对强弱：均线、MACD','#/gp'],['VAL','估值：各行业市盈率','#/val'],['BR','广度：多少股票站上均线','#/br'],['RV','同业比较：一家公司和同行','#/rv'],
