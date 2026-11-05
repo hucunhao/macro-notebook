@@ -297,6 +297,7 @@ const Home = (() => {
       <div class="verdict2 ${V.l}"><span class="light ${V.l}"></span><div class="vt">${V.html}</div>
         <div class="vm">${U.info(`<b>怎么读这一页</b><br>· 最上面一句话是根据下面 6 张卡片自动写的。<br>· 每张卡片：标题是正式名称，旁边小字是它的意思；大数字是最新值；彩色字是状态（绿 = 正常，黄 = 注意，红 = 警报）。<br>· 鼠标放在 ⓘ 上看定义、门槛和注意事项；点卡片看长期历史图。<br>· 所有门槛都能在右上角“门槛设置”里改。<br><br>数据截至美股 ${MS.meta.newest} 收盘，生成于 ${MS.meta.generated}（台北时间）。本页只用于学习和观察，不构成投资建议。`, 'ⓘ 怎么读')}</div></div>
       <div class="hcards">${cs.map(cardHTML).join('')}</div>
+      ${window.Valuation ? Valuation.homeStrip() : ''}
       <div class="home-low">
         <section class="panel flow" id="p-flow"><div class="ph"><span class="t">它们怎么互相影响</span><span class="s">点方块看历史图</span>
           <span class="r"><span class="badge y">简化示意，不是定律 ${U.info(FLOWTIP)}</span></span></div>

@@ -232,7 +232,26 @@ canvas.curve{width:100%;display:block}
 .selrow select{background:var(--panel2);border:1px solid var(--line2);color:var(--ink);border-radius:var(--radius);padding:1px 4px}
 .tbl-compact th,.tbl-compact td{padding:3px 6px;font-size:12.5px}
 tr.click{cursor:pointer} tr.click:hover td{background:var(--accent-soft)} tr.sel td{background:var(--accent-soft)}
+.val-banner{background:var(--accent-soft);border:1px solid var(--line);border-radius:var(--radius);padding:8px 12px;margin:0 0 8px;font-size:13.5px;line-height:1.5}
+.val-metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+.val-metric .k{font-size:12px;color:var(--ink2)}
+.val-metric .v{font-family:var(--mono);font-size:22px;font-weight:700;line-height:1.25}
+.val-metric .s{font-size:11.5px;color:var(--ink3);line-height:1.4}
+.val-growths{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.val-growth{background:var(--panel2);border-radius:var(--radius);padding:8px 10px}
+.val-growth .k{font-size:12px;color:var(--ink2)}
+.val-growth .v{font-family:var(--mono);font-size:26px;font-weight:700;line-height:1.2}
+.val-growth p{margin:4px 0 0;font-size:13.5px;line-height:1.55}
+@media (max-width:700px){.val-growths{grid-template-columns:1fr}.val-growth .v{font-size:22px}}
+.val-limits{margin:0;padding-left:18px}
+.val-limits li{margin:4px 0}
+tr.val-flip td{background:var(--y-soft)}
+a.val-home{display:flex;gap:6px 14px;flex-wrap:wrap;align-items:baseline;text-decoration:none;color:var(--ink2);background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:6px 12px;margin:0 0 8px;font-size:13px;line-height:1.45}
+a.val-home:hover{border-color:var(--accent)}
+a.val-home .t{color:var(--accent);font-weight:700}
+a.val-home b{color:var(--ink);font-family:var(--mono)}
 @media (max-width:1100px){.home-grid,.mk-grid{grid-template-columns:1fr}.layer2{grid-template-columns:1fr 1fr}}
+@media (max-width:520px){.val-metrics{grid-template-columns:1fr}.val-metric .v{font-size:20px}}
 nav.main{align-items:center;gap:2px}
 nav.main a .code{font-family:var(--mono);color:var(--accent);font-weight:700;margin-right:4px;font-size:12px}
 nav.main a.on .code{color:var(--on-accent)}

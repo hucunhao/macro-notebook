@@ -33,12 +33,13 @@ const Pages2 = (() => {
     const r = U.ser('HYG_LQD'); if (r) Charts.line(U.$('#cr-r'), { x: r.d.map(U.ts), ys: [r.v], labels: ['HYG÷LQD'], range: '3Y', height: 200, fmt: v => v == null ? '—' : v.toFixed(4) });
   }
 
-  // ---------- VAL ----------
+  // ---------- VAL 估值监视器（旧的行业横截面留在下面，口径不同） ----------
   function val(app){
+    app.innerHTML = (window.Valuation ? Valuation.html() : panel('', '估值监视器', '', '<div class="nodata">数据暂缺 <span class="badge a">公开近似</span></div>')) + '<div id="val-x"></div>';
+    if (window.Valuation) Valuation.mount(app);
+    const extra = U.$('#val-x');
     const S = window.SP;
-    const sigma = `<div class="nodata" style="text-align:left;padding:12px">数据暂不可得：纳指 100 / 标普 500 市盈率的长期历史（算 1–20 年均值和 ±1σ/2σ 要 20 年以上的月度数据）没有免费、合规的来源。
-      Shiller 教授公开的标普周期调整市盈率只更新到 2024 年 6 月；用现在的成分股和 SEC 财报往回拼会有幸存者偏差，而且 SEC 结构化财报 2009 年才开始。所以不做“历史均值 ± 标准差”表，下面只给“今天”的横截面。</div>`;
-    if (!S){ app.innerHTML = panel('', '估值', '', sigma + noSP); return; }
+    if (!S){ extra.innerHTML = panel('', '附：标普成分股横截面', '另一套口径', noSP, '', 'full'); return; }
     const secs = [...new Set(S.rows.map(r => r.sec))];
     const agg = rows => { const ok = rows.filter(r => r.mcap && !r.dup); const sm = ok.reduce((a, r) => a + r.mcap, 0);
       const e = ok.filter(r => r.pe != null || r.nm != null); // 有净利润数据的
@@ -46,11 +47,10 @@ const Pages2 = (() => {
       const rev = ok.reduce((a, r) => a + (r.ps ? r.mcap / r.ps : 0), 0), mcRev = ok.filter(r => r.ps).reduce((a, r) => a + r.mcap, 0);
       return { n: rows.length, mcap: sm, pe: ni ? ok.filter(r => r.pe).reduce((a, r) => a + r.mcap, 0) / ni : null, fpe: med(rows.map(r => r.fpe)), pem: med(rows.map(r => r.pe)), ps: rev ? mcRev / rev : null, pb: med(rows.map(r => r.pb)), g: med(rows.map(r => r.g)) }; };
     const all = agg(S.rows), tr = (n, a, cls='') => `<tr class="${cls}"><td>${n}</td><td>${a.n}</td><td>${fcap(a.mcap)}</td><td>${fx(a.pe)}</td><td>${fx(a.pem)}</td><td>${fx(a.fpe)}</td><td>${fx(a.ps, 2)}</td><td>${fx(a.pb, 2)}</td><td>${fpct(a.g)}</td></tr>`;
-    app.innerHTML = `<div class="mk-grid">
-      ${panel('', '估值和历史比', '历史均值 ± 1 / 2 个标准差（1–20 年窗口）', sigma, '<span class="badge n">数据暂不可得</span>', 'full')}
-      ${panel('', '今天的估值横截面', `标普 500 成分股，按 GICS 行业，${U.fresh(S.asof)}（同一公司的两类股票只算一次）`, `<table class="tbl-compact"><thead><tr><th>行业</th><th>公司数</th><th>合计市值（美元）</th><th>合计市盈率</th><th>市盈率中位数</th><th>前瞻市盈率中位数</th><th>合计市销率</th><th>市净率中位数</th><th>隐含增长中位数</th></tr></thead><tbody>
-        ${tr('标普 500 全部', all, 'base')}${secs.map(s => [s, agg(S.rows.filter(r => r.sec === s))]).sort((a, b) => b[1].mcap - a[1].mcap).map(([s, a]) => tr(s, a)).join('')}</tbody></table>
-        <div class="hint">合计市盈率 = 合计市值 ÷ 合计净利润（只算净利润为正的公司）。${S.notes.fund} ${S.notes.pe} 这些数是“今天一个时点”，不能说明现在比历史贵还是便宜。</div>`, '', 'full')}
+    extra.innerHTML = `<div class="mk-grid">
+      ${panel('', '附：今天的行业横截面', `标普 500 成分股，按 GICS 行业，${U.fresh(S.asof)}（同一公司的两类股票只算一次）`, `<div class="tablewrap"><table class="tbl-compact"><thead><tr><th>行业</th><th>公司数</th><th>合计市值（美元）</th><th>合计市盈率</th><th>市盈率中位数</th><th>前瞻市盈率中位数</th><th>合计市销率</th><th>市净率中位数</th><th>隐含增长中位数</th></tr></thead><tbody>
+        ${tr('标普 500 全部', all, 'base')}${secs.map(s => [s, agg(S.rows.filter(r => r.sec === s))]).sort((a, b) => b[1].mcap - a[1].mcap).map(([s, a]) => tr(s, a)).join('')}</tbody></table></div>
+        <div class="hint">这张表是原来的横截面，和上面的监视器不是同一套数。合计市盈率 = 合计市值 ÷ 合计净利润，而且只算净利润为正的公司（亏损的被丢掉了）。${S.notes.fund} ${S.notes.pe} 这张表不参与加仓判断。</div>`, '', 'full')}
     </div>`;
   }
 

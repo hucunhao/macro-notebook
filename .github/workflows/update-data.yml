@@ -58,7 +58,7 @@ jobs:
 
       - name: 建好 raw/ 子文件夹
         if: steps.fresh.outputs.skip != 'true'
-        run: mkdir -p raw/fred raw/treasury raw/other raw/nasdaq raw/cnn raw/sp500 raw/em raw/cal raw/earnings raw/qdii
+        run: mkdir -p raw/fred raw/treasury raw/other raw/nasdaq raw/cnn raw/sp500 raw/em raw/cal raw/earnings raw/qdii raw/valuation
 
       # 这一步也会跑 extra_data.py（全球股指、商品汇率、经济日历、财报日历、QDII 溢价）。
       # 每个请求最多试 3 次；扩展数据抓不到时沿用缓存或上一版 data/*.json，不会让这一步失败，也不会清空已发布的数据。
