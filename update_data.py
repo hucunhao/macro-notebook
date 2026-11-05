@@ -5,6 +5,7 @@ Market Dashboard 数据更新脚本
        python3 update_data.py --offline  # 不联网, 只用 raw/ 里已有文件重建 data/
 产出:  data/series.json + data/series.js   (观察页用的所有序列)
        data/week1.json/js, data/week2.json/js  (学习页)
+       data/valuation.json + data/valuation.js  (估值监视器，见 valuation_data.py)
        /workspace/quant_course/week1_results.md, week2_results.md
 浏览器从 file:// 打开时不能 fetch JSON, 所以每个 JSON 同时写一份 .js (window.XXX = {...})。
 """
@@ -531,6 +532,12 @@ def main():
         extra_data.run()
     except Exception as e:
         print('extra_data 失败（不影响核心数据）：', e)
+    # 估值监视器（SPY/QQQ 权重、SEC 每股收益、纳斯达克一致预期）。失败沿用上一版，不挡核心数据。
+    try:
+        import valuation_data
+        valuation_data.run()
+    except Exception as e:
+        print('valuation_data 失败（不影响核心数据）：', e)
     for k,v in S['series'].items(): print(f"{k:12s} {v['start']} → {v['end']}  n={len(v['d'])}")
     print('status:', {k:v for k,v in STATUS.items() if v!='ok'} or 'all ok')
 if __name__ == '__main__': main()

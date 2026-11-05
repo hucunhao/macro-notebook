@@ -39,7 +39,7 @@ def main():
             warn(f'核心序列 {k} 最新日 {s["d"][-1]} 落后于 session {sess}（不阻止发布，备用定时会再跑）')
     others = {k: v for k, v in st.items() if k not in core and v not in ('ok', 'skipped')}
     if others: warn(f'非核心来源有 {len(others)} 个没抓到新数据（不阻止发布）：' + ', '.join(f'{k}={v}' for k, v in list(others.items())[:15]))
-    for name in ('world', 'calendar', 'earnings', 'qdii', 'sp500'):
+    for name in ('world', 'calendar', 'earnings', 'qdii', 'sp500', 'valuation'):
         try: o = json.load(open(os.path.join(D, name + '.json')))
         except Exception as e: warn(f'扩展数据 {name} 读不到（{e}），网页会显示“暂不可得”'); continue
         sn = o.get('stale_n')

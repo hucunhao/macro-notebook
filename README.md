@@ -2,7 +2,7 @@
 
 每天看盘用的市场面板（学习内容已搬到 https://hucunhao.github.io/quant-learning/ ）。纯静态（HTML/CSS/JS），不需要编译。
 
-页面：总览、美股、全球股市、热力图、利率曲线、信用、商品汇率、经济日历、财报日历、QDII 溢价、季节性，以及“更多”里的早报、技术、估值、广度、同业比较、全部指标、笔记、数据来源。
+页面：总览、美股、全球股市、热力图、利率曲线、信用、商品汇率、经济日历、财报日历、QDII 溢价、季节性，以及“更多”里的早报、技术、估值监视器、广度、同业比较、全部指标、笔记、数据来源。
 
 - 早报：`#/brief` 始终是最新一期全文，`#/brief/YYYY-MM-DD` 是某一天。发布后的地址是 https://hucunhao.github.io/macro-notebook/#/brief 。每天怎么放文件，见 `content/briefs/README.md`。这一页要靠浏览器读取文件，直接双击 `index.html` 打不开，需要 GitHub Pages 或本地静态服务器。
 
