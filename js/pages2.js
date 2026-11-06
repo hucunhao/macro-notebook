@@ -1,6 +1,6 @@
 // 信用、估值、热力图、广度、同业比较
 const Pages2 = (() => {
-  const { panel, fmtP, heat } = Markets;
+  const { panel, fmtP, heat, priceLabel } = Markets;
   const noSP = '<div class="nodata">数据暂不可得：标普 500 成分股数据还没生成（运行 constituents.py）。</div>';
   const fx = (x, nd=1) => x == null || !isFinite(x) ? '—' : x.toFixed(nd);
   const fpct = (x, nd=1) => x == null || !isFinite(x) ? '—' : (x*100).toFixed(nd) + '%';
@@ -72,7 +72,7 @@ const Pages2 = (() => {
   function hm(app){
     const S = window.SP; if (!S){ app.innerHTML = panel('', '热力图', '', noSP); return; }
     let k = 'd1';
-    app.innerHTML = panel('', '标普 500 热力图', `方块大小 = 市值，颜色 = 涨跌；${U.fresh(S.asof)}`, `<div class="selrow">${[['d1', '1 日', .03], ['w1', '1 周', .06], ['m1', '1 月', .1], ['ytd', '今年', .3]].map(([kk, n]) => `<button class="btn small ${kk === k ? 'primary' : ''}" data-k="${kk}">${n}</button>`).join('')}<span class="hint">悬停看数，点方块去“同业比较”。</span></div><canvas id="hm-c" style="width:100%;display:block;margin-top:6px"></canvas><div class="hint">${S.notes.src}。没有市值或价格的公司不画；同一家公司的第二类股票（如 GOOG、FOX、NWS）不重复画。</div>`);
+    app.innerHTML = panel('', '标普 500 热力图', `方块大小 = 市值，颜色 = 这一价格日的涨跌。${U.esc(priceLabel(S))}`, `<div class="selrow">${[['d1', '1 日', .03], ['w1', '1 周', .06], ['m1', '1 月', .1], ['ytd', '今年', .3]].map(([kk, n]) => `<button class="btn small ${kk === k ? 'primary' : ''}" data-k="${kk}">${n}</button>`).join('')}<span class="hint">悬停看数，点方块去“同业比较”。</span></div><canvas id="hm-c" style="width:100%;display:block;margin-top:6px"></canvas><div class="hint">${U.esc(S.price_note || '')} ${S.notes.src}。没有市值或这一价格日涨跌的公司不画；同一家公司的第二类股票（如 GOOG、FOX、NWS）不重复画。</div>`);
     const cv = U.$('#hm-c'); let rects = [], hover = null;
     const scaleOf = { d1: .03, w1: .06, m1: .1, ytd: .3 };
     function draw(){
@@ -97,7 +97,7 @@ const Pages2 = (() => {
         });
       });
       if (hover){
-        const c = hover, lines = [`${c.t}  ${c.n}`, `${c.sec} · ${c.sub}`, `市值 ${fcap(c.mcap)} 美元`, `涨跌 ${fmtP(c[k])}　收盘 ${c.px == null ? '—' : c.px.toFixed(2)}`];
+        const c = hover, lines = [`${c.t}  ${c.n}`, `${c.sec} · ${c.sub}`, `市值 ${fcap(c.mcap)} 美元`, `涨跌 ${fmtP(c[k])}　收盘 ${c.px == null ? '—' : c.px.toFixed(2)}${c.px_date ? '（' + c.px_date + '）' : ''}`];
         g.font = `12px ${U.css('--font')}`; const bw = Math.max(...lines.map(l => g.measureText(l).width)) + 16, bh = lines.length*17 + 8;
         let bx = hover.mx + 12, by = hover.my + 12; if (bx + bw > W) bx = hover.mx - bw - 12; if (by + bh > H) by = hover.my - bh - 12;
         g.fillStyle = U.css('--panel2'); g.strokeStyle = U.css('--accent'); g.lineWidth = 1; g.fillRect(bx, by, bw, bh); g.strokeRect(bx + .5, by + .5, bw, bh);

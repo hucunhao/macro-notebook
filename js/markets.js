@@ -132,6 +132,16 @@ const Markets = (() => {
     draw();
   }
   const panel = (id, t, sub, body, extra='', cls='') => `<section class="panel ${cls}" ${id ? `id="${id}"` : ''}><div class="ph"><span class="t">${t}</span><span class="s">${sub}</span>${extra ? `<span class="r">${extra}</span>` : ''}</div><div class="pb">${body}</div></section>`;
+  // 热力图 / 涨跌榜用的日期是价格日（这一天的收盘），不是文件生成时间，也不是「任意一只股票最晚一根日线」。
+  function priceLabel(S){
+    if (!S) return '价格日 —';
+    const day = S.price_session || S.asof || '—';
+    const bits = [`价格日 ${day}`];
+    if (S.price_session_n != null) bits.push(`${S.price_session_n} 只有这一天的收盘`);
+    if (S.lagging_n) bits.push(`${S.lagging_n} 只还没有这一天，未画入`);
+    if (S.generated) bits.push(`生成于 ${S.generated}（台北时间）`);
+    return bits.join(' · ');
+  }
   // 可用序列：指数、ETF、行业 ETF
   function pool(K){
     const base = [['SPX', '标普 500 指数'], ['NDX', '纳指 100 指数'], ['SPY', '标普 500 ETF'], ['QQQ', '纳指 100 ETF'], ['IWM', '小盘 罗素 2000'], ['RSP', '等权标普'], ['GLD', '黄金'], ['TLT', '20 年以上美债'], ['HYG', '高收益债'], ['LQD', '投资级债'], ['EEM', '新兴市场'], ['VGK', '欧洲'], ['FXI', '中国大盘'], ['UUP', '美元'], ['USO', '原油']];
@@ -159,7 +169,7 @@ const Markets = (() => {
     const draw = () => {
       const r = S.rows.filter(x => x[k] != null).sort((a, b) => b[k] - a[k]);
       const tb = (xs) => `<table class="tbl-compact"><tbody>${xs.map(x => `<tr class="click" data-t="${x.t}"><td>${x.t}</td><td style="text-align:left;max-width:140px;overflow:hidden;text-overflow:ellipsis">${U.esc(x.n)}</td><td>${x.px == null ? '—' : x.px.toFixed(2)}</td><td class="${x[k] >= 0 ? 'pos' : 'neg'}">${fmtP(x[k])}</td></tr>`).join('')}</tbody></table>`;
-      el.innerHTML = `<div class="selrow">${[['d1', '1 日'], ['w1', '1 周'], ['m1', '1 月'], ['ytd', '今年']].map(([kk, n]) => `<button class="btn small ${kk === k ? 'primary' : ''}" data-mv="${kk}">${n}</button>`).join('')}<span class="hint">${U.fresh(S.asof)}，共 ${S.n} 只</span></div>
+      el.innerHTML = `<div class="selrow">${[['d1', '1 日'], ['w1', '1 周'], ['m1', '1 月'], ['ytd', '今年']].map(([kk, n]) => `<button class="btn small ${kk === k ? 'primary' : ''}" data-mv="${kk}">${n}</button>`).join('')}<span class="hint">${U.esc(priceLabel(S))}。1 日 = 价格日收盘 ÷ 前一交易日收盘 − 1。</span></div>
         <div class="grid g2" style="margin-top:6px"><div><div class="hint">涨幅最大</div>${tb(r.slice(0, 10))}</div><div><div class="hint">跌幅最大</div>${tb(r.slice(-10).reverse())}</div></div><div class="hint">点一行去“同业比较”。</div>`;
       U.$$('[data-mv]', el).forEach(b => b.onclick = () => { k = b.dataset.mv; draw(); });
       U.$$('tr[data-t]', el).forEach(tr => tr.onclick = () => { location.hash = '#/rv/' + tr.dataset.t; });
@@ -191,5 +201,5 @@ const Markets = (() => {
     app.innerHTML = panel('', '技术和相对强弱', '任选两个代码做比值；第二个选“无”就是单看价格', '<div id="mk-rs"></div>');
     rsTool(U.$('#mk-rs'), K);
   }
-  return { mkt, fi, gp, perf, panel, pool, getSer, fmtP, heat };
+  return { mkt, fi, gp, perf, panel, pool, getSer, fmtP, heat, priceLabel };
 })();

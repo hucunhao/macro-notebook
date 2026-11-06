@@ -20,6 +20,26 @@ GH = os.environ.get('GITHUB_ACTIONS') == 'true'
 def warn(msg): print(('::warning::' if GH else '警告：') + msg)
 def err(msg): print(('::error::' if GH else '错误：') + msg)
 
+def load_sp500():
+    try: return json.load(open(os.path.join(D, 'sp500.json')))
+    except Exception: return None
+
+def constituent_price_gap(obj, want, max_lag_share=0.05):
+    """热力图价格日没有追上最近收盘，或太多股票还停在更早的收盘。返回说明；对齐了就返回 None。
+
+    只有 asof、没有 price_session 的旧文件也算没对齐：asof 曾经是「任意一只股票最晚一根日线」，
+    和画面上的 1 日涨跌不是同一天。
+    """
+    if not obj: return '没有成分股文件'
+    ps = obj.get('price_session')
+    if not ps: return '成分股文件没有价格日（不能用最新一根日线的日期代替画面上的涨跌日）'
+    if want and ps < want: return f'成分股价格日 {ps} 早于最近已收盘交易日 {want}'
+    lag = obj.get('lagging_n') or 0
+    got = obj.get('price_session_n') or 0
+    if got + lag and lag / (got + lag) > max_lag_share:
+        return f'成分股 {lag} 只还没有 {ps} 的收盘（已有 {got} 只）'
+    return None
+
 def main():
     S = json.load(open(os.path.join(D, 'series.json')))
     m = S['meta']; st = m.get('status', {})
@@ -32,6 +52,8 @@ def main():
         elif v == 'lagging': warn(f'核心来源 {k} 文件已抓到，但日线还没到最近已收盘交易日（来源晚挂收盘价）')
         elif v != 'ok': warn(f'核心来源 {k} 这次没抓到新数据，沿用上次的文件（{v}）')
     sess = m.get('session') or us_session()
+    gap = constituent_price_gap(load_sp500(), sess)
+    if gap: warn('热力图：' + gap + '（不阻止这次发布；下次定时还会再跑，直到价格日追上）')
     for k in core_series:
         s = S['series'].get(k)
         if not s or len(s.get('v', [])) < 100: bad.append(f'核心序列 {k} 为空或太短')
@@ -64,7 +86,8 @@ def us_session(now=None):
 
 def already_updated():
     """定时任务开跑前用：已发布的数据如果已经对应最近一个美股交易日、核心来源当时全部抓到新数据、
-    且 SPX/NDX/VIX 日线不落后，就不用再跑。结果写到 $GITHUB_OUTPUT 的 skip=true/false；退出码总是 0。"""
+    SPX/NDX/VIX 日线不落后，而且热力图的价格日也到了这一天，就不用再跑。
+    结果写到 $GITHUB_OUTPUT 的 skip=true/false；退出码总是 0。"""
     want = us_session()
     try:
         S = json.load(open(os.path.join(D, 'series.json')))
@@ -78,10 +101,12 @@ def already_updated():
         d = (series.get(k) or {}).get('d') or []
         if not d or d[-1] < want:
             lag.append(f'{k}={(d[-1] if d else "无")}')
-    # core_ok 为假（含 lagging）或股指日线落后 → 不跳过，让备用定时补上
-    skip = bool(have and have >= want and core_ok and not lag)
+    # core_ok 为假（含 lagging）、股指日线落后，或热力图价格日还没到 → 不跳过，让备用定时补上
+    gap = constituent_price_gap(load_sp500(), want)
+    skip = bool(have and have >= want and core_ok and not lag and not gap)
     print(f'最近一个已收盘的美股交易日：{want}；已发布数据对应：{have or "未知"}，核心来源全部新抓：{core_ok}'
-          + (f'，股指落后：{",".join(lag)}' if lag else '，股指日线已到齐') + '。'
+          + (f'，股指落后：{",".join(lag)}' if lag else '，股指日线已到齐')
+          + (f'，热力图：{gap}' if gap else '，热力图价格日已到齐') + '。'
           + ('已经是最新，这次跳过。' if skip else '需要更新。'))
     out = os.environ.get('GITHUB_OUTPUT')
     if out:

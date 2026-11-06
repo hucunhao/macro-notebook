@@ -3,8 +3,9 @@
 标普 500 成分股数据（热力图 HM、广度 BR、涨跌榜、估值 VAL、同业比较 RV 用）
 来源（全部免费、公开、不需要登录；请求头写明身份，不伪装浏览器）：
   - 成分股名单和 GICS 行业：维基百科 “List of S&P 500 companies”（CC BY-SA）
-  - 当日收盘、涨跌、市值：纳斯达克官网 股票筛选器（一次请求拿全部美股）
-  - 每只股票约 2 年日线：纳斯达克官网 历史行情
+  - 收盘和涨跌：纳斯达克官网历史日线的收盘价（1 日涨跌 = 价格日收盘 ÷ 前一收盘 − 1）
+  - 市值：纳斯达克官网股票筛选器。筛选器的最新价常常还停在上一交易日，不用它当收盘
+  - 每只股票约 2 年日线：纳斯达克官网历史行情
   - 下一财年一致预期 EPS：纳斯达克官网 分析师预测页
   - 财报数字：美国 SEC EDGAR XBRL frames 接口（按会计科目一次取全部公司）
 用法：python3 constituents.py            # 联网抓取（约 10–20 分钟），失败的沿用 raw/sp500 里的旧文件
@@ -63,12 +64,16 @@ def screener():
         try: out[r['symbol']] = dict(px=float(r['lastsale'].replace('$', '').replace(',', '')), mcap=float(r['marketCap'] or 0) or None, d1=float(r['pctchange'].replace('%', '') or 0)/100)
         except Exception: pass
     return out
-def per_ticker(tickers):
+def per_ticker(tickers, session=None, hist_only=False):
     frm = (TODAY - dt.timedelta(days=760)).isoformat()
+    session = session or us_session()
     def one(t):
         s = t.replace('.', '_')
-        a = get(f'https://api.nasdaq.com/api/quote/{t}/historical?assetclass=stocks&fromdate={frm}&todate={TODAY}&limit=9999', os.path.join(RAW, 'hist', s + '.json'), check=lambda x: '"rows"' in x, fresh_hours=18)
-        b = get(f'https://api.nasdaq.com/api/analyst/{t}/earnings-forecast', os.path.join(RAW, 'fcst', s + '.json'), check=lambda x: 'yearlyForecast' in x, fresh_hours=18)
+        hp = os.path.join(RAW, 'hist', s + '.json')
+        # 18 小时内的文件如果最后一根还早于最近收盘日，必须重下。否则早间抓到的周三收盘会挡住周四的日线。
+        hours = 18 if _hist_reached(hp, session) else None
+        a = get(f'https://api.nasdaq.com/api/quote/{t}/historical?assetclass=stocks&fromdate={frm}&todate={TODAY}&limit=9999', hp, check=lambda x: '"rows"' in x, fresh_hours=hours)
+        b = True if hist_only else get(f'https://api.nasdaq.com/api/analyst/{t}/earnings-forecast', os.path.join(RAW, 'fcst', s + '.json'), check=lambda x: 'yearlyForecast' in x, fresh_hours=18)
         return t, a, b
     res = {}
     with cf.ThreadPoolExecutor(4) as ex:
@@ -76,13 +81,89 @@ def per_ticker(tickers):
             res[t] = (a, b)
             if i % 50 == 0: print(f'  {i}/{len(tickers)}', flush=True)
     STATUS['纳斯达克 个股日线'] = f'{sum(1 for a, b in res.values() if a)}/{len(tickers)}'
-    STATUS['纳斯达克 分析师预测'] = f'{sum(1 for a, b in res.values() if b)}/{len(tickers)}'
-def read_hist(t):
-    p = os.path.join(RAW, 'hist', t.replace('.', '_') + '.json')
-    try: rows = json.load(open(p))['data']['tradesTable']['rows']
+    if not hist_only: STATUS['纳斯达克 分析师预测'] = f'{sum(1 for a, b in res.values() if b)}/{len(tickers)}'
+def read_hist_file(path):
+    try: rows = json.load(open(path))['data']['tradesTable']['rows']
     except Exception: return [], []
     xs = sorted((dt.datetime.strptime(r['date'], '%m/%d/%Y').date().isoformat(), float(r['close'].replace('$', '').replace(',', ''))) for r in rows)
     return [d for d, _ in xs], [v for _, v in xs]
+def read_hist(t):
+    return read_hist_file(os.path.join(RAW, 'hist', t.replace('.', '_') + '.json'))
+def _hist_reached(path, session):
+    """文件够新，而且最后一根日线已经到了这个收盘日，才跳过下载。"""
+    if not session or not os.path.exists(path): return False
+    if time.time() - os.path.getmtime(path) >= 18 * 3600: return False
+    d, v = read_hist_file(path)
+    return bool(d) and d[-1] >= session
+def us_session(now=None):
+    """最近一个已收盘的美股交易日（美东 16:15 之后算当天；不含节假日）。与 quality_gate.py 一致。"""
+    from zoneinfo import ZoneInfo
+    t = (now or dt.datetime.now(dt.timezone.utc)).astimezone(ZoneInfo('America/New_York'))
+    d = t.date()
+    if d.weekday() >= 5 or (t.hour, t.minute) < (16, 15):
+        d -= dt.timedelta(days=1)
+        while d.weekday() >= 5: d -= dt.timedelta(days=1)
+    return d.isoformat()
+def taipei_now():
+    from zoneinfo import ZoneInfo
+    return dt.datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d %H:%M')
+def choose_price_session(last_dates, target=None, min_share=0.5):
+    """画面用哪一个收盘日。
+
+    优先用 target（最近一个已收盘交易日），只要至少一半股票的日线已经到了那一天。
+    没到一半，就用大多数股票已经到达的最近一天，而不是全体里最晚的一根，也不是文件生成时间。
+    没到这一天的股票不放进涨跌（见 price_fields），所以标题日期和颜色是同一天。
+    返回 (日期或 None, 日线已到这一天或更晚的只数)。
+    """
+    dates = [d for d in last_dates if d]
+    if not dates: return None, 0
+    n = len(dates)
+    def reached(day): return sum(d >= day for d in dates)
+    if target and reached(target) / n >= min_share:
+        return target, reached(target)
+    best = None
+    for day in sorted(set(dates)):
+        if reached(day) / n >= min_share: best = day
+    return best, (reached(best) if best else 0)
+def session_bar(dates, values, session):
+    """这一天的官方收盘；没有这一天就退到不晚于它的最后一根。
+
+    d1 只用两笔收盘：这一根，和它前面那一根。不使用筛选器的涨跌幅。
+    """
+    if not dates or not values: return None
+    i = bisect.bisect_right(dates, session) - 1 if session else len(values) - 1
+    if i < 0: return None
+    px = values[i]
+    d1 = (px / values[i - 1] - 1) if i >= 1 else None
+    return dict(px=px, px_date=dates[i], d1=d1, on_session=bool(session) and dates[i] == session, i=i)
+def keep_prior_close(old, session):
+    """下载失败时留下一版收盘。没有记录过价格日的旧数字不用（说不清是哪一天）。"""
+    if not old or old.get('px') is None or not old.get('px_date'): return None
+    on = bool(session) and old.get('px_date') == session
+    return dict(px=old['px'], px_date=old['px_date'], d1=old.get('d1') if on else None, on_session=on, i=None, kept=True)
+def price_fields(dates, values, session, old=None):
+    bar = session_bar(dates, values, session) if dates and values else None
+    if bar is None: return keep_prior_close(old, session) or dict(px=None, px_date=None, d1=None, on_session=False, i=None, kept=False)
+    bar['kept'] = False
+    if not bar['on_session']: bar['d1'] = None   # 不是这一天的涨跌，不放进热力图
+    return bar
+def returns_at(dates, values, i):
+    """窗口都结束在下标 i 这一根收盘，不混进更晚或更早的另一天。"""
+    empty = dict(w1=None, m1=None, ytd=None, y1=None, a50=None, a200=None, hi52=None, lo52=None)
+    if i is None or i < 0 or not values: return empty
+    def back(days):
+        j = bisect.bisect_right(dates, (dt.date.fromisoformat(dates[i]) - dt.timedelta(days=days)).isoformat()) - 1
+        return values[i] / values[j] - 1 if j >= 0 else None
+    j = bisect.bisect_right(dates, f'{int(dates[i][:4]) - 1}-12-31') - 1
+    ytd = values[i] / values[j] - 1 if j >= 0 else None
+    def ma(k):
+        if i + 1 < k: return None
+        return sum(values[i - k + 1:i + 1]) / k
+    y1 = values[max(0, i - 251):i + 1]
+    m50, m200 = ma(50), ma(200)
+    return dict(w1=back(7), m1=back(30), ytd=ytd, y1=back(365),
+                a50=(values[i] > m50) if m50 else None, a200=(values[i] > m200) if m200 else None,
+                hi52=(values[i] >= max(y1) * 0.999) if y1 else None, lo52=(values[i] <= min(y1) * 1.001) if y1 else None)
 def read_fwd_eps(t, fy_end=None):
     p = os.path.join(RAW, 'fcst', t.replace('.', '_') + '.json')
     try: rows = json.load(open(p))['data']['yearlyForecast']['rows']
@@ -123,24 +204,146 @@ def sec_frames():
     STATUS['SEC EDGAR frames'] = f"{len(F['rev'])} 家公司有营收"
     return F
 
+def price_note(price_session, on_n, lag_n, generated, mismatch, target, sample=None):
+    day = price_session or '—'
+    parts = [f'1 日涨跌 = {day} 的收盘价 ÷ 前一个交易日的收盘价 − 1。两笔都是纳斯达克历史日线里的收盘，不是筛选器上的最新价。']
+    parts.append(f'{on_n} 只有 {day} 的收盘。')
+    if lag_n:
+        who = ''
+        if sample:
+            shown = list(sample)[:8]
+            who = '（' + '、'.join(shown) + ('…' if lag_n > len(shown) else '') + '）'
+        parts.append(f'{lag_n} 只没有这一天的日线{who}，不放进这一天的涨跌。')
+    if target and price_session and price_session < target:
+        parts.append(f'最近一个已收盘交易日是 {target}，但还没有足够多的日线，所以画面停在 {day}。')
+    parts.append(f'文件生成于 {generated}（台北时间）。生成时间不是价格日期。市值来自纳斯达克筛选器，可能不是同一个交易日。')
+    if mismatch: parts.append(f'筛选器最新价和 {day} 收盘相差超过 0.5% 的有 {mismatch} 只，画面没有采用筛选器的涨跌。')
+    return ''.join(parts)
+def breadth_of(H):
+    days = sorted({x for d, _ in H.values() for x in d})[-320:]
+    br = {'d': [], 'p200': [], 'p50': [], 'n': []}
+    idx = {t: {x: i for i, x in enumerate(d)} for t, (d, v) in H.items()}
+    for day in days:
+        a2 = a5 = n2 = n5 = 0
+        for t, (d, v) in H.items():
+            i = idx[t].get(day)
+            if i is None: continue
+            if i >= 199: n2 += 1; a2 += v[i] > sum(v[i-199:i+1])/200
+            if i >= 49: n5 += 1; a5 += v[i] > sum(v[i-49:i+1])/50
+        if n2 >= 300: br['d'].append(day); br['p200'].append(round(a2/n2*100, 1)); br['p50'].append(round(a5/n5*100, 1)); br['n'].append(n2)
+    return br
+def pack_sp500(rows, H, price_session, session, mismatch, br=None):
+    generated = taipei_now()
+    on_n = sum(1 for r in rows if r.get('on_session'))
+    lag_syms = [r['t'] for r in rows if not r.get('on_session')]
+    rnd = lambda x: round(x, 4) if isinstance(x, float) else x
+    return dict(asof=price_session, price_session=price_session, target_session=session,
+                price_session_n=on_n, lagging_n=len(lag_syms), lagging_sample=lag_syms[:12],
+                screener_mismatch_n=mismatch, generated=generated, status=dict(STATUS), n=len(rows),
+                price_note=price_note(price_session, on_n, len(lag_syms), generated, mismatch, session, lag_syms),
+                rows=[{k: rnd(v) for k, v in r.items()} for r in rows], breadth=br if br is not None else breadth_of(H),
+                notes=dict(src='维基百科（成分股和 GICS 行业）、纳斯达克官网历史日线的收盘价（涨跌）、纳斯达克筛选器（市值，可能不是同一个交易日）、SEC EDGAR（财报）',
+                           fund='财报数字取 SEC XBRL frames 里最近一个已申报的完整财年（表里“财年截至”那一列）；资产负债表取最近一个季末。不是“过去 12 个月”。少数公司（例如换了 SEC 编号的）财报缺失，显示“—”。',
+                           pe='市盈率 = 市值 ÷ 最近财年净利润；前瞻市盈率 = 股价 ÷ 紧接着的下一个财年的一致预期 EPS（纳斯达克页面，数据商 Zacks）；隐含增长 = 市盈率 ÷ 前瞻市盈率 − 1（市场预期的下一年利润增长，粗略）；PEG = 市盈率 ÷（隐含增长 × 100）。',
+                           surv='广度用的是现在的成分股名单往回算，过去被剔除的公司不在里面（幸存者偏差）。'))
+def write_sp500(out, H):
+    try:
+        old = json.load(open(os.path.join(OUT, 'sp500.json'))); old_h = sum(1 for r in old.get('rows', []) if r.get('hist'))
+    except Exception: old_h = 0
+    have = sum(1 for r in out['rows'] if r.get('hist'))
+    if old_h and have < 0.8 * old_h:
+        print(f'sp500: 这次只有 {have} 家有日线（上一版 {old_h} 家），保留上一版 data/sp500*，不覆盖'); return False
+    for ext, pre in (('json', ''), ('js', 'window.SP = ')):
+        with open(os.path.join(OUT, f'sp500.{ext}'), 'w') as f: f.write(pre + json.dumps(out, ensure_ascii=False, separators=(',', ':')) + (';' if pre else ''))
+    allD = sorted({x for d, _ in H.values() for x in d}); pos = {x: i for i, x in enumerate(allD)}
+    hh = {}
+    for t, (d, v) in H.items():
+        arr = [None] * len(allD)
+        for x, y in zip(d, v): arr[pos[x]] = round(y, 2)
+        hh[t] = arr
+    with open(os.path.join(OUT, 'sp500_hist.js'), 'w') as f: f.write('window.SPH = ' + json.dumps(dict(dates=allD, h=hh), separators=(',', ':')) + ';')
+    print('sp500 rows', len(out['rows']), 'on', out.get('price_session'), out.get('price_session_n'), 'lagging', out.get('lagging_n'), 'generated', out.get('generated'))
+    return True
+def load_published_hist():
+    p = os.path.join(OUT, 'sp500_hist.js')
+    if not os.path.exists(p): return {}
+    raw = open(p, encoding='utf-8').read()
+    obj = json.loads(raw[raw.find('{'):].rstrip().rstrip(';'))
+    H = {}
+    for t, arr in obj['h'].items():
+        d, v = [], []
+        for i, x in enumerate(arr):
+            if x is not None: d.append(obj['dates'][i]); v.append(float(x))
+        if d: H[t] = (d, v)
+    return H
+def reprice():
+    """用已发布的日线重算热力图价格；日线还没到最近收盘日的，只补下这几只。不重下财报和名单。"""
+    session = us_session()
+    old = json.load(open(os.path.join(OUT, 'sp500.json')))
+    H = load_published_hist()
+    for t in list(H):
+        d, v = read_hist(t)
+        if d: H[t] = (d, v)
+    symbols = [r['t'] for r in old['rows']]
+    behind = [t for t in symbols if t not in H or H[t][0][-1] < session]
+    print(f'reprice 目标收盘日 {session}：{len(symbols) - len(behind)} 只日线已到，{len(behind)} 只要补')
+    if behind and not OFFLINE:
+        per_ticker(behind, session=session, hist_only=True)
+        for t in behind:
+            d, v = read_hist(t)
+            if d: H[t] = (d, v)
+    ps, _reached = choose_price_session([H[t][0][-1] for t in symbols if t in H], target=session)
+    scr = {}
+    sp = os.path.join(RAW, 'nasdaq_screener.json')
+    if os.path.exists(sp):
+        try:
+            for r in json.load(open(sp))['data']['rows']:
+                scr[r['symbol']] = float(r['lastsale'].replace('$', '').replace(',', ''))
+        except Exception: scr = {}
+    rows, mismatch = [], 0
+    blank = dict(w1=None, m1=None, ytd=None, y1=None, a50=None, a200=None, hi52=None, lo52=None)
+    for r in old['rows']:
+        t = r['t']; d, v = H.get(t, ([], []))
+        prior = r if r.get('px_date') else None
+        bar = price_fields(d, v, ps, prior)
+        rets = returns_at(d, v, bar.get('i')) if bar.get('on_session') else blank
+        ref = scr.get(nq_sym(t), r.get('px'))
+        if ref and bar.get('on_session') and bar.get('px') and abs(ref / bar['px'] - 1) > 0.005: mismatch += 1
+        nr = dict(r)
+        if bar.get('px') and r.get('px') and r.get('fpe') and r['px'] != bar['px']:
+            feps = r['px'] / r['fpe']
+            if feps > 0:
+                fpe = bar['px'] / feps
+                pe = r.get('pe')
+                gimp = (pe / fpe - 1) if pe and fpe else None
+                nr['fpe'] = fpe; nr['g'] = gimp; nr['peg'] = (pe / (gimp * 100)) if pe and gimp and gimp > 0 else None
+        nr.update(px=bar['px'], px_date=bar['px_date'], on_session=bool(bar.get('on_session')), d1=bar['d1'], hist=bool(v), **rets)
+        rows.append(nr)
+    out = pack_sp500(rows, H, ps, session, mismatch)
+    out['status'] = dict(old.get('status') or {})
+    out['status'].update(STATUS)
+    write_sp500(out, H)
 def build():
     M = members(); scr = screener()
-    if not OFFLINE: per_ticker([m['t'] for m in M])
+    session = us_session()
+    if not OFFLINE: per_ticker([m['t'] for m in M], session=session)
     F = sec_frames()
-    rows, H = [], {}
+    try: prev = {r['t']: r for r in json.load(open(os.path.join(OUT, 'sp500.json'))).get('rows', [])}
+    except Exception: prev = {}
+    H = {}
     for m in M:
-        t = m['t']; q = scr.get(nq_sym(t), {}); d, v = read_hist(t)
-        if v: H[t] = (d, v)
-        px = q.get('px') or (v[-1] if v else None); mcap = q.get('mcap')
-        def ret(days):
-            if not v: return None
-            i = bisect.bisect_right(d, (dt.date.fromisoformat(d[-1]) - dt.timedelta(days=days)).isoformat()) - 1
-            return v[-1]/v[i] - 1 if i >= 0 else None
-        ytd = None
-        if v:
-            i = bisect.bisect_right(d, f'{int(d[-1][:4])-1}-12-31') - 1; ytd = v[-1]/v[i] - 1 if i >= 0 else None
-        ma = lambda k: sum(v[-k:])/k if len(v) >= k else None
-        y1 = v[-252:] if v else []
+        d, v = read_hist(m['t'])
+        if v: H[m['t']] = (d, v)
+    price_session, _reached = choose_price_session([d[-1] for d, _ in H.values()], target=session)
+    rows = []
+    mismatch = 0
+    for m in M:
+        t = m['t']; q = scr.get(nq_sym(t), {}); d, v = H.get(t, ([], []))
+        bar = price_fields(d, v, price_session, prev.get(t))
+        px, px_date, on_session = bar['px'], bar['px_date'], bar['on_session']
+        mcap = q.get('mcap') or (prev.get(t) or {}).get('mcap')
+        rets = returns_at(d, v, bar.get('i')) if on_session else dict(w1=None, m1=None, ytd=None, y1=None, a50=None, a200=None, hi52=None, lo52=None)
+        if q.get('px') and on_session and px and abs(q['px'] / px - 1) > 0.005: mismatch += 1
         c = m['cik']; g = lambda k: F[k].get(c, (None, None))[0] if c else None
         fy_end = F['ni'].get(c, (None, None))[1] if c else None
         # 损益表科目只用和净利润同一个财年的数，避免把不同年份混在一起
@@ -156,9 +359,9 @@ def build():
         ebitda = (oi + (da or 0)) if oi is not None else None
         sd = lambda a, b: a/b if a is not None and b not in (None, 0) else None
         rows.append(dict(t=t, n=m['n'], sec=SEC_ZH.get(m['sec'], m['sec']), sec_en=m['sec'], sub=m['sub'], mcap=mcap, px=px,
-            d1=q.get('d1') if q else (v[-1]/v[-2]-1 if len(v) > 1 else None), w1=ret(7), m1=ret(30), ytd=ytd, y1=ret(365),
-            a50=(v[-1] > ma(50)) if ma(50) else None, a200=(v[-1] > ma(200)) if ma(200) else None,
-            hi52=(v[-1] >= max(y1)*0.999) if y1 else None, lo52=(v[-1] <= min(y1)*1.001) if y1 else None,
+            px_date=px_date, on_session=on_session,
+            d1=bar['d1'], w1=rets['w1'], m1=rets['m1'], ytd=rets['ytd'], y1=rets['y1'],
+            a50=rets['a50'], a200=rets['a200'], hi52=rets['hi52'], lo52=rets['lo52'],
             pe=pe, fpe=fpe, fpe_fy=fyl, peg=(pe/(gimp*100)) if pe and gimp and gimp > 0 else None,
             ev_ebitda=sd(ev, ebitda) if ebitda and ebitda > 0 else None, ev_sales=sd(ev, rev), ps=sd(mcap, rev), pb=sd(mcap, eq) if eq and eq > 0 else None,
             gm=sd(gp, rev), om=sd(oi, rev), nm=sd(ni, rev), roe=sd(ni, eq) if eq and eq > 0 else None, g=gimp, fy_end=fy_end, hist=bool(v)))
@@ -167,42 +370,8 @@ def build():
     for r, m in sorted(zip(rows, M), key=lambda x: -(x[0]['mcap'] or 0)):
         if m['cik'] and m['cik'] in seen: r['dup'] = seen[m['cik']]
         elif m['cik']: seen[m['cik']] = r['t']
-    # 广度时间序列：每天有多少成分股站上 50 / 200 日线（用现在的成分股名单回算，有幸存者偏差）
-    days = sorted({x for d, _ in H.values() for x in d})[-320:]
-    br = {'d': [], 'p200': [], 'p50': [], 'n': []}
-    idx = {t: {x: i for i, x in enumerate(d)} for t, (d, v) in H.items()}
-    for day in days:
-        a2 = a5 = n2 = n5 = 0
-        for t, (d, v) in H.items():
-            i = idx[t].get(day)
-            if i is None: continue
-            if i >= 199: n2 += 1; a2 += v[i] > sum(v[i-199:i+1])/200
-            if i >= 49: n5 += 1; a5 += v[i] > sum(v[i-49:i+1])/50
-        if n2 >= 300: br['d'].append(day); br['p200'].append(round(a2/n2*100, 1)); br['p50'].append(round(a5/n5*100, 1)); br['n'].append(n2)
-    asof = max((d[-1] for d, _ in H.values()), default=None)
-    rnd = lambda x: round(x, 4) if isinstance(x, float) else x
-    out = dict(asof=asof, generated=dt.datetime.now().strftime('%Y-%m-%d %H:%M'), status=STATUS, n=len(rows),
-               rows=[{k: rnd(v) for k, v in r.items()} for r in rows], breadth=br,
-               notes=dict(src='维基百科（成分股和 GICS 行业）、纳斯达克官网（价格、市值、分析师一致预期）、SEC EDGAR（财报）',
-                          fund='财报数字取 SEC XBRL frames 里最近一个已申报的完整财年（表里“财年截至”那一列）；资产负债表取最近一个季末。不是“过去 12 个月”。少数公司（例如换了 SEC 编号的）财报缺失，显示“—”。',
-                          pe='市盈率 = 市值 ÷ 最近财年净利润；前瞻市盈率 = 股价 ÷ 紧接着的下一个财年的一致预期 EPS（纳斯达克页面，数据商 Zacks）；隐含增长 = 市盈率 ÷ 前瞻市盈率 − 1（市场预期的下一年利润增长，粗略）；PEG = 市盈率 ÷（隐含增长 × 100）。',
-                          surv='广度用的是现在的成分股名单往回算，过去被剔除的公司不在里面（幸存者偏差）。'))
-    # 保险：这次有日线的公司比上一版少很多（来源大面积连不上），就保留上一版，不覆盖
-    try:
-        old = json.load(open(os.path.join(OUT, 'sp500.json'))); old_h = sum(1 for r in old.get('rows', []) if r.get('hist'))
-    except Exception: old_h = 0
-    if old_h and len(H) < 0.8 * old_h:
-        print(f'sp500: 这次只有 {len(H)} 家有日线（上一版 {old_h} 家），保留上一版 data/sp500*，不覆盖'); return
-    for ext, pre in (('json', ''), ('js', 'window.SP = ')):
-        with open(os.path.join(OUT, f'sp500.{ext}'), 'w') as f: f.write(pre + json.dumps(out, ensure_ascii=False, separators=(',', ':')) + (';' if pre else ''))
-    # GP 页用的个股日线（按需加载）：共用日期轴，缺的天写 null
-    allD = sorted({x for d, _ in H.values() for x in d}); pos = {x: i for i, x in enumerate(allD)}
-    hh = {}
-    for t, (d, v) in H.items():
-        arr = [None]*len(allD)
-        for x, y in zip(d, v): arr[pos[x]] = round(y, 2)
-        hh[t] = arr
-    with open(os.path.join(OUT, 'sp500_hist.js'), 'w') as f: f.write('window.SPH = ' + json.dumps(dict(dates=allD, h=hh), separators=(',', ':')) + ';')
-    print('sp500 rows', len(rows), 'with hist', len(H), 'breadth days', len(br['d']), 'status', STATUS)
+    out = pack_sp500(rows, H, price_session, session, mismatch)
+    write_sp500(out, H)
 
-if __name__ == '__main__': build()
+if __name__ == '__main__':
+    reprice() if '--reprice' in sys.argv else build()
