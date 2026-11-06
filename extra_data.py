@@ -490,6 +490,13 @@ def run():
     print('extra_data（扩展数据，失败不阻止发布）：')
     for k, v in meta.items(): print(f'  {k}: {v}')
     print(f'  非 ok 请求 {len(bad)} / {len(STATUS)}：', dict(list(bad.items())[:20]))
+    try:
+        import qdii_monitor
+        meta['qdii_monitor'] = qdii_monitor.run()
+        print('  qdii_monitor:', meta['qdii_monitor'])
+    except Exception as e:
+        meta['qdii_monitor'] = f'failed: {e}'
+        print('  qdii_monitor 失败（沿用上一份，如果有的话）：', e)
     return meta
 
 if __name__ == '__main__':
