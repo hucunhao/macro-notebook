@@ -9,13 +9,14 @@ const pw = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const chromium = pw.chromium || pw.default.chromium;
 const root = fileURLToPath(new URL('.', import.meta.url));
 const shot = process.env.QDII_SHOT || '';
+const shotOpen = process.env.QDII_SHOT_OPEN || '';
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.md': 'text/plain' };
 
 function fail(msg) { console.error('FAIL', msg); process.exitCode = 1; }
 
 const html = readFileSync(join(root, 'index.html'), 'utf8');
 const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(m => m[1]);
-const need = ['data/qdii_monitor.js', 'js/qdii_monitor.js', 'js/pages3.js', 'js/app.js'];
+const need = ['data/qdii_monitor.js', 'js/qdii_logic.js', 'js/qdii_monitor.js', 'js/pages3.js', 'js/app.js'];
 let at = -1;
 for (const src of need) {
   const i = scripts.indexOf(src);
@@ -44,23 +45,39 @@ const errors = [];
 page.on('pageerror', e => errors.push('pageerror ' + e.message));
 page.on('console', msg => { if (msg.type() === 'error') errors.push('console ' + msg.text()); });
 
-async function onQdii() {
-  await page.waitForSelector('#qdii-mon h2, #qdii-mon .t, #app', { timeout: 15000 });
+async function onQdii(shots) {
+  await page.waitForSelector('#qdii-mon', { timeout: 15000 });
   await page.waitForFunction(() => document.body.innerText.includes('QDII 溢价监视'), null, { timeout: 15000 });
   const heading = await page.locator('#qdii-mon .t').innerText();
   if (heading.trim() !== 'QDII 溢价监视') fail(`标题是「${heading}」`);
-  const rows = page.locator('#qdii-mon tbody tr');
-  const n = await rows.count();
-  if (n < 9) fail(`监视表只有 ${n} 行`);
+  const lead = await page.locator('#qdm-lead').innerText();
+  if (!lead.includes('qdiilimit 的 T-1') || !lead.includes('实时EST溢价') || !lead.includes('不是投资建议')) fail('结论没有按同一列对照：' + lead);
+  if (!lead.includes('纳指') || !lead.includes('标普')) fail('结论没有两个主题');
+  const nq = await page.locator('#qdm-nasdaq').innerText();
+  const sp = await page.locator('#qdm-spx').innerText();
+  if (!nq.includes('T-1') || !nq.includes('实时EST溢价') || !sp.includes('T-1') || !sp.includes('实时EST溢价')) fail('主题卡片没有同时标出 T-1 和实时EST');
+  const warn = await page.locator('.qdm-warn').innerText();
+  if (!warn.includes('本站观察仅') || !warn.includes('不是长历史')) fail('短历史警告不在：' + warn);
+  if (await page.locator('#qdm-c, #qdii-mon canvas').count()) fail('观察不足 30 日却画了历史线');
+  const details = page.locator('#qdm-funds');
+  if (await details.evaluate(el => el.open)) fail('九只基金分项默认展开了');
+  if (shots && shot){ await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: shot, fullPage: false }); }
+  await page.locator('#qdm-funds > summary').click();
+  await page.waitForFunction(() => document.querySelector('#qdm-funds').open);
+  const snap = JSON.parse(readFileSync(join(root, 'data/qdii_monitor.json'), 'utf8'));
+  const by = Object.fromEntries(snap.funds.map(f => [f.code, f]));
+  if (snap.funds.length < 9) fail('快照不足 9 只');
   for (const code of ['513100', '159659', '513500']) {
-    const cells = await page.locator(`#qdii-mon tbody tr`, { hasText: code }).first().locator('td').allInnerTexts();
-    const picked = [cells[2], cells[5], cells[8], cells[10]].map(s => (s || '').trim());
-    if (picked.some(s => !s || s === '—' || s === '暂缺')) fail(`${code} 有空的溢价列 ${picked.join(' | ')}`);
-    if (new Set(picked).size !== 4) fail(`${code} 的 T-1/官方/参考/实时溢价不是四个不同的数：${picked.join(' | ')}`);
+    const f = by[code];
+    const box = await page.locator(`#qdm-funds [data-code="${code}"]`).evaluate(el => el.textContent);
+    for (const v of [f.t1_premium, f.official_premium, f.ref_premium, f.rt_premium]) {
+      if (v == null) fail(`${code} 快照里有空溢价`);
+      if (!box.includes(Number(v).toFixed(2))) fail(`${code} 页面没有 ${v}：${box.slice(0, 180)}`);
+    }
+    const vals = [f.t1_premium, f.official_premium, f.ref_premium, f.rt_premium];
+    if (new Set(vals).size !== 4) fail(`${code} 四列溢价不是互不相同`);
   }
-  const chips = await page.locator('#qdii-mon .chip .k').allInnerTexts();
-  if (!chips.some(t => t.includes('纳指') && t.includes('中位数'))) fail('没有纳指主题中位数');
-  if (!chips.some(t => t.includes('标普') && t.includes('中位数'))) fail('没有标普主题中位数');
+  if (shots && shotOpen) await page.locator('#qdm-funds').screenshot({ path: shotOpen });
   const before = await page.locator('#qdm-drag').innerText();
   if (!before.includes('71.1')) fail(`计算器默认结果不是例子里的 71.1%：${before}`);
   await page.locator('#qdm-buy').fill('0');
@@ -73,6 +90,7 @@ async function onQdii() {
   if (!old || !mon || !(mon.y < old.y)) fail('收盘/净值表不在监视表下面');
   const note = await page.locator('#app').innerText();
   if (!note.includes('收盘价 ÷ 公布净值') || !note.includes('不是同一列')) fail('下面旧表没有单独的算法说明');
+  if (!note.includes('不重算')) fail('没有写明本站不重算 EST');
   const probe = await page.evaluate(() => ({
     prop: Object.prototype.hasOwnProperty.call(window, 'QdiiMon'),
     type: typeof window.QdiiMon,
@@ -82,18 +100,16 @@ async function onQdii() {
 
 try {
   await page.goto(base + '#/qdii', { waitUntil: 'load' });
-  await onQdii();
+  await onQdii(true);
   await page.click('a[href="#/observe"]');
   await page.waitForFunction(() => !document.querySelector('#qdii-mon'));
   await page.click('a[href="#/qdii"]');
-  await onQdii();
+  await onQdii(false);
   const bad = errors.filter(t => /QdiiMon|QDM|is not defined|is not a function/i.test(t));
   if (bad.length) fail('控制台：\n' + bad.join('\n'));
   if (errors.length) console.log('其它控制台错误（未当成失败）：\n' + errors.join('\n'));
-  if (shot) await page.screenshot({ path: shot, fullPage: true });
   if (!process.exitCode) console.log('PASS #/qdii 监视表已渲染，离开再回来仍在');
 } catch (e) {
-  if (shot) await page.screenshot({ path: shot, fullPage: true }).catch(() => {});
   fail(e && e.message ? e.message : String(e));
 } finally {
   await browser.close();
