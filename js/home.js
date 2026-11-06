@@ -40,13 +40,13 @@ const Home = (() => {
   function ticker(){
     const cell = (k, s, nd=2, tip='') => { if (!s || s.v.length < 2) return '';
       const n = s.v.length - 1, c = s.v[n]/s.v[n-1] - 1;
-      return `<div class="tk" title="${tip || k}，截至 ${s.d[n]}"><div class="k">${k}</div><div class="v">${U.fmtNum(s.v[n], nd)}<span class="c ${c >= 0 ? 'pos' : 'neg'}">${fmtP(c, 2)}</span></div></div>`; };
+      return `<div class="tk" title="${tip || k}。这一格是 ${s.d[n]} 的收盘，不是旁边其它指数的日期"><div class="k">${k} · ${s.d[n]}</div><div class="v">${U.fmtNum(s.v[n], nd)}<span class="c ${c >= 0 ? 'pos' : 'neg'}">${fmtP(c, 2)}</span></div></div>`; };
     const lv = (k, id, f, tip) => { const s = U.ser(id); if (!s) return ''; const n = s.v.length - 1, d = s.v[n] - s.v[n-1];
       return `<div class="tk" title="${tip}，截至 ${s.d[n]}"><div class="k">${k}</div><div class="v">${f(s.v[n])}<span class="c ${d > 0 ? 'neg' : d < 0 ? 'pos' : ''}">${U.sgn(d*100, 0)}bp</span></div></div>`; };
     const cells = `${cell('标普 500', U.ser('SPX'))}${cell('纳指 100', U.ser('NDX'))}${cell('道琼斯', snapItem('DJIA'))}${cell('恒生', snapItem('HSI'))}${cell('上证', snapItem('SSE'))}${cell('日经 225', snapItem('N225'))}
       ${cell('黄金', snapItem('GOLD'), 1, 'COMEX 黄金期货连续合约')}${cell('原油', snapItem('CL'), 2, 'NYMEX WTI 原油期货连续合约')}${cell('美元指数', snapItem('DXY'), 2)}${cell('美元/人民币', snapItem('USDCNH'), 4, '美元兑离岸人民币')}
       ${lv('10 年美债', 'UST10', v => v.toFixed(2) + '%', '10 年期美国国债收益率；右边是 1 日变化，1bp = 0.01 个百分点')}
-      <div class="tk"><div class="k">美股数据截至</div><div class="v" style="font-size:12.5px">${MS.meta.newest}</div></div>`;
+      <div class="tk"><div class="k">收盘日</div><div class="v" style="font-size:12.5px">${MS.meta.equity_label}</div></div>`;
     return `<div class="ticker"><div class="track">${cells}<div class="dup" aria-hidden="true">${cells}</div></div></div>`;
   }
 
@@ -295,7 +295,7 @@ const Home = (() => {
     const CR = creditC(), cs = cards(C, D, T), N = nodes(C, D, cs), V = verdict(C, D, T);
     app.innerHTML = `${ticker()}
       <div class="verdict2 ${V.l}"><span class="light ${V.l}"></span><div class="vt">${V.html}</div>
-        <div class="vm">${U.info(`<b>怎么读这一页</b><br>· 最上面一句话是根据下面 6 张卡片自动写的。<br>· 每张卡片：标题是正式名称，旁边小字是它的意思；大数字是最新值；彩色字是状态（绿 = 正常，黄 = 注意，红 = 警报）。<br>· 鼠标放在 ⓘ 上看定义、门槛和注意事项；点卡片看长期历史图。<br>· 所有门槛都能在右上角“门槛设置”里改。<br><br>数据截至美股 ${MS.meta.newest} 收盘，生成于 ${MS.meta.generated}（台北时间）。本页只用于学习和观察，不构成投资建议。`, 'ⓘ 怎么读')}</div></div>
+        <div class="vm">${U.info(`<b>怎么读这一页</b><br>· 最上面一句话是根据下面 6 张卡片自动写的。<br>· 每张卡片：标题是正式名称，旁边小字是它的意思；大数字是最新值；彩色字是状态（绿 = 正常，黄 = 注意，红 = 警报）。<br>· 鼠标放在 ⓘ 上看定义、门槛和注意事项；点卡片看长期历史图。<br>· 所有门槛都能在右上角“门槛设置”里改。<br><br>${MS.meta.equity_label}。生成于 ${MS.meta.generated}（台北时间）。纳指100的数字只用它自己的收盘日。本页只用于学习和观察，不构成投资建议。`, 'ⓘ 怎么读')}</div></div>
       <div class="hcards">${cs.map(cardHTML).join('')}</div>
       ${window.Valuation ? Valuation.homeStrip() : ''}
       <div class="home-low">

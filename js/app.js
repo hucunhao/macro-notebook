@@ -2,11 +2,16 @@
 (function(){
   const app = U.$('#app');
   if (!window.MS){ app.innerHTML = '<div class="nodata">没找到数据文件 data/series.js。请先运行 python3 update_data.py。</div>'; return; }
-  // 最新的数据日期（用于判断哪条数据更新慢）
+  // newest 仍是标普/利率/VIX 里最晚的一天，用来给别的板块标「比美股收盘旧」。
+  // 它不是纳指100的日期。纳指100若落后，页脚和首页必须把两个日子分开写。
   MS.meta.newest = Object.values(MS.series).filter(s => ['SPX','UST10','VIX'].includes(s.id) || true).map(s => s.end).filter(Boolean).sort().pop();
   const core = ['SPX','UST10','VIX'].map(k => MS.series[k] && MS.series[k].end).filter(Boolean).sort();
   if (core.length) MS.meta.newest = core[core.length-1];
-  U.$('#foot-data').textContent = `数据截至 ${MS.meta.newest}，生成于 ${MS.meta.generated}（台北时间）。`;
+  MS.meta.equity_label = EquityBanner.banner([
+    { name: '标普', date: MS.series.SPX && MS.series.SPX.end },
+    { name: '纳指100', date: MS.series.NDX && MS.series.NDX.end },
+  ]);
+  U.$('#foot-data').textContent = `${MS.meta.equity_label}。生成于 ${MS.meta.generated}（台北时间）。`;
   function route(){
     const h = location.hash.replace(/^#\/?/, '') || 'observe';
     let [r, a] = h.split('/');

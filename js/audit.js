@@ -330,7 +330,7 @@ const Audit = (() => {
     const rows = [['0或1', '25%', '约45%'], ['≥2', '35%', '约52%'], ['=3', '40%', '约52%']];
     const taipei = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' });
     app.innerHTML = `
-      <div class="pg-h"><h1>可审计一页</h1><span class="s">规则和情绪放在同一页。数据截至美股 ${MS.meta.newest}</span>
+      <div class="pg-h"><h1>可审计一页</h1><span class="s">规则和情绪放在同一页。${MS.meta.equity_label || ('数据截至美股 ' + MS.meta.newest)}</span>
         ${U.info(`<b>这一页怎么用</b><br>四条领先触发决定概率桶。确认信号和下面的情绪块都不能把概率往下调。<br>书面定义：<a href="${RULES}">${RULES}</a><br>页上句式：rules/ui_copy_audit_page.md（2026-10-24）。<br>数字门槛在右上角「门槛设置」，默认与书面定义一致。`, 'ⓘ 怎么读')}</div>
       ${bad.length ? `<div class="weak">门槛设置与书面数字不一致：${bad.map(U.esc).join('；')}。本页「是/否」按门槛设置计算；「成立」句仍是书面原文。</div>` : ''}
       <p class="hint" style="margin-top:0">${COPY.rev23}；2026-10-24（E 信用/AI 债务证据栏：自动化边界 + FRED 清单）。定义源 <a href="${RULES}">${RULES}</a></p>
