@@ -1,5 +1,6 @@
 // QDII 监视。T-1（qdiilimit）和 EST（palmmicro）分列，不合成区间。不是投资建议。
-const QdiiMon = (() => {
+// 必须挂在 window 上。const 顶层绑定不会变成 window 属性，pages3 用 window.QdiiMon 判断时会当成没加载。
+window.QdiiMon = (() => {
   const fp = (x, nd=2) => x == null || !isFinite(+x) ? '—' : (x > 0 ? '+' : '') + (+x).toFixed(nd) + '%';
   const num = x => x == null || !isFinite(+x) ? '—' : (+x).toFixed(3);
   const SUB = { unknown: '未知', suspended: '暂停', limited: '限额', normal: '正常' };
