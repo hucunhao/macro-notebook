@@ -170,6 +170,14 @@ def _numbers(row):
     if not row: return set()
     return {k for k in TRACKED_NUMBERS if isinstance(row.get(k), (int, float))}
 
+def carried_success_time(old_row, old_snapshot):
+    """沿用旧数字时能写上的时间。先用该行自己的，没有则用整表上次成功。绝不是这次抓取的时间。"""
+    if old_row and old_row.get('last_success'):
+        return old_row['last_success']
+    if old_snapshot and old_snapshot.get('last_success'):
+        return old_snapshot['last_success']
+    return None
+
 def reconcile_targets(funds, old_snapshot, fetched):
     """九只目标代码任一缺失，或上次有数字的格子这次变空：沿用该代码上次的非空快照。
 
@@ -188,7 +196,7 @@ def reconcile_targets(funds, old_snapshot, fetched):
                 for k in TRACKED_NUMBERS + TRACKED_TEXT:
                     if k in old: kept[k] = old[k]
                 kept['name'] = old.get('name') or kept.get('name')
-                kept['last_success'] = old.get('last_success')
+                kept['last_success'] = carried_success_time(old, old_snapshot)
                 kept['stale_reason'] = '这次来源没有这只' if not fresh_numbers else '这次缺 ' + '、'.join(lost)
             else:
                 for k in TRACKED_NUMBERS:
@@ -244,11 +252,21 @@ def build_snapshot(t1, est, fetched):
 def observation_key(ob):
     return (ob['source'], ob['code'], ob['field'], ob.get('asof'), ob.get('value'))
 
+def normalize_row_times(snapshot):
+    """旧的成功快照只有整表 last_success，行上没有。补到行上，但不把这次的新时间写进旧数字。"""
+    if not snapshot: return snapshot
+    table = snapshot.get('last_success')
+    for f in snapshot.get('funds') or []:
+        if f.get('last_success'): continue
+        if f.get('stale') or not snapshot.get('partial'):
+            if table: f['last_success'] = table
+    return snapshot
+
 def new_observations(snapshot):
     out = []
-    fetched = snapshot['generated']
     for f in snapshot['funds']:
         if f.get('stale'): continue   # 沿用的旧数字不再记成一次新观察
+        fetched = f.get('last_success') or snapshot.get('generated')
         if f.get('t1_premium') is not None:
             out.append(dict(source='qdiilimit', code=f['code'], theme=f['theme'], field='t1',
                             value=f['t1_premium'], asof=f.get('t1_nav_date'), fetched=fetched))
@@ -313,6 +331,7 @@ def write_outputs(snapshot, history):
     os.makedirs(CONTENT, exist_ok=True)
     os.makedirs(os.path.dirname(DATA_JS), exist_ok=True)
     snapshot = dict(snapshot)
+    normalize_row_times(snapshot)
     snapshot['history_days'] = {k: history_days(history, k) for k in ('t1', 'official', 'ref', 'rt')}
     blob = dict(snapshot, history=history.get('observations') or [])
     text = json.dumps(blob, ensure_ascii=False, separators=(',', ':'))
@@ -346,10 +365,13 @@ def apply_parsed_update(t1, est, old, fetched):
     snap['partial'] = not full
     if full:
         snap['last_success'] = fetched
+        snap['generated'] = fetched
         snap['update_error'] = None
     else:
         snap['last_success'] = (old or {}).get('last_success')
+        if old and old.get('generated'): snap['generated'] = old['generated']
         snap['update_error'] = '这些代码这次没有完整数字，已沿用上次非空快照，整表成功时间不往前拨：' + '、'.join(problems)
+    normalize_row_times(snap)
     return snap
 
 def run(fetch_html=None):

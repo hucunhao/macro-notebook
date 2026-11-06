@@ -39,7 +39,7 @@ const QdiiMon = (() => {
       return themeLine(th.t1, `${th.name} · T-1 中位数`) + themeLine(th.rt, `${th.name} · 实时EST溢价中位数`) + themeLine(th.official, `${th.name} · 官方EST溢价中位数`);
     }).join('');
     const rows = D.funds.map(f => `<tr>
-      <td><b>${U.esc(f.code)}</b>${f.stale ? `<div class="hint">沿用上次 ${U.esc(f.last_success || '—')}</div>` : (f.last_success ? `<div class="hint">本次 ${U.esc(f.last_success)}</div>` : '')}</td>
+      <td><b>${U.esc(f.code)}</b>${f.stale ? `<div class="hint">沿用上次 ${U.esc(f.last_success || D.last_success || '时间未记录')}</div>` : (f.last_success ? `<div class="hint">本次 ${U.esc(f.last_success)}</div>` : '')}</td>
       <td style="text-align:left">${U.esc(f.name || '')}<div class="hint">${U.esc(f.theme_name || '')}</div></td>
       <td>${fp(f.t1_premium)}</td><td>${U.esc(f.t1_nav_date || '—')}</td>
       <td>${num(f.official_est)}</td><td>${fp(f.official_premium)}</td><td>${U.esc(f.est_date || '—')}</td>

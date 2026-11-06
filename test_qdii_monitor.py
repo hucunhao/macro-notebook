@@ -1,4 +1,5 @@
 """QDII 监视：T-1 和 EST 不合并，申购未知不当成正常，拖累公式，历史只追加真观察。"""
+import json
 import unittest
 import qdii_monitor as Q
 
@@ -177,6 +178,87 @@ class PartialFailure(unittest.TestCase):
         self.assertEqual(recovered['last_success'], '2026-11-08 16:20')
         self.assertFalse(any(f.get('stale') for f in recovered['funds']))
         self.assertTrue(all(f['last_success'] == '2026-11-08 16:20' for f in recovered['funds']))
+
+
+class LegacySnapshot(unittest.TestCase):
+    """用仓库里真正的 content/qdii/latest.json，不是手造的新格式。"""
+
+    def legacy(self):
+        import os
+        path = os.path.join(os.path.dirname(__file__), 'content', 'qdii', 'latest.json')
+        snap = json.load(open(path, encoding='utf-8'))
+        self.assertEqual(snap.get('last_success'), '2026-11-06 17:01')
+        self.assertEqual([f['code'] for f in snap['funds']], [c for c, _, _ in Q.WATCH])
+        by = {f['code']: f for f in snap['funds']}
+        self.assertEqual(by['513100']['t1_premium'], 17.16)
+        self.assertEqual(by['513100']['rt_premium'], 20.53)
+        self.assertNotIn(0, (by['513100']['t1_premium'], by['513100']['rt_premium']))
+        # 已补过行时间的文件，行时间必须等于这次成功，不能是更晚的抓取。
+        for f in snap['funds']:
+            if f.get('last_success'):
+                self.assertEqual(f['last_success'], '2026-11-06 17:01')
+        legacy = json.loads(json.dumps(snap))
+        legacy.pop('partial', None)
+        legacy.pop('last_attempt', None)
+        for f in legacy['funds']:
+            f.pop('last_success', None)
+            f.pop('stale', None)
+            f.pop('stale_reason', None)
+        self.assertTrue(all(f.get('last_success') is None for f in legacy['funds']))
+        return legacy
+
+    def test_first_partial_keeps_table_time_on_carried_rows(self):
+        legacy = self.legacy()
+        codes = [c for c, _, _ in Q.WATCH]
+        t1, est = _source([c for c in codes if c != '513100'])
+        first = Q.apply_parsed_update(t1, est, legacy, '2026-11-07 16:20')
+        self.assertTrue(first['partial'])
+        self.assertEqual(first['last_success'], '2026-11-06 17:01')
+        self.assertNotEqual(first['last_success'], '2026-11-07 16:20')
+        self.assertEqual(first.get('generated'), legacy.get('generated'))
+        row = next(f for f in first['funds'] if f['code'] == '513100')
+        self.assertTrue(row['stale'])
+        self.assertEqual(row['last_success'], '2026-11-06 17:01')
+        self.assertNotEqual(row['last_success'], '2026-11-07 16:20')
+        self.assertEqual(row['t1_premium'], 17.16)
+        self.assertEqual(row['rt_premium'], 20.53)
+        self.assertFalse(any(o['code'] == '513100' and o.get('fetched') == '2026-11-07 16:20' for o in Q.new_observations(first)))
+        # 历史文件里的观察时间是当初抓到的时间，不在这次沿用里改写。
+        import os
+        hist = json.load(open(os.path.join(os.path.dirname(__file__), 'content', 'qdii', 'history.json'), encoding='utf-8'))
+        self.assertTrue(hist['observations'])
+        self.assertTrue(all(o.get('fetched') == '2026-11-06 17:01' for o in hist['observations']))
+
+    def test_second_partial_does_not_replace_carried_time(self):
+        legacy = self.legacy()
+        codes = [c for c, _, _ in Q.WATCH]
+        t1, est = _source([c for c in codes if c != '513100'])
+        first = Q.apply_parsed_update(t1, est, legacy, '2026-11-07 16:20')
+        t1, est = _source([c for c in codes if c != '513100'])
+        est['est']['159941']['official_premium'] = None
+        second = Q.apply_parsed_update(t1, est, first, '2026-11-07 18:05')
+        kept = next(f for f in second['funds'] if f['code'] == '513100')
+        self.assertEqual(kept['last_success'], '2026-11-06 17:01')
+        self.assertEqual(kept['t1_premium'], 17.16)
+        also = next(f for f in second['funds'] if f['code'] == '159941')
+        self.assertTrue(also['stale'])
+        self.assertEqual(also['last_success'], '2026-11-07 16:20')
+        self.assertNotEqual(also['last_success'], '2026-11-07 18:05')
+        self.assertEqual(second['last_success'], '2026-11-06 17:01')
+
+    def test_recovery_after_legacy_partial_stamps_only_new_values(self):
+        legacy = self.legacy()
+        codes = [c for c, _, _ in Q.WATCH]
+        t1, est = _source([c for c in codes if c != '513100'])
+        partial = Q.apply_parsed_update(t1, est, legacy, '2026-11-07 16:20')
+        recovered = Q.apply_parsed_update(*_source(codes), partial, '2026-11-08 16:20')
+        self.assertFalse(recovered['partial'])
+        self.assertEqual(recovered['last_success'], '2026-11-08 16:20')
+        row = next(f for f in recovered['funds'] if f['code'] == '513100')
+        self.assertFalse(row['stale'])
+        self.assertEqual(row['last_success'], '2026-11-08 16:20')
+        self.assertNotEqual(row['t1_premium'], 17.16)  # 新抓到的数，不再是沿用的旧溢价
+        self.assertTrue(all(f['last_success'] == '2026-11-08 16:20' and not f.get('stale') for f in recovered['funds']))
 
 
 if __name__ == '__main__':
