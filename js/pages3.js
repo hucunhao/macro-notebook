@@ -20,7 +20,7 @@ const Pages3 = (() => {
       el.innerHTML = `<table class="tbl-compact heat"><thead><tr><th>${opts.groupLabel || '地区'}</th><th>名称</th>${opts.note ? '<th style="text-align:left">是什么</th>' : ''}<th>最新</th><th>日期</th>${keys.map(([k, n]) => `<th style="cursor:pointer" data-s="${k}" title="点击按这一列排序">${n}${sortK === k ? ' ▼' : ''}</th>`).join('')}<th>距 1 年高点</th></tr></thead><tbody>
         ${rows.map(({ s, p, hi1 }) => { const g = !sortK && s.group !== lastG ? s.group : (sortK ? s.group : ''); lastG = s.group;
           const stale = (U.ts(opts.newest || p.date) - U.ts(p.date)) > 5*86400;
-          return `<tr class="click ${opts.sel && opts.sel() === s.id ? 'sel' : ''}" data-id="${s.id}"><td class="muted">${g}</td><td style="text-align:left"><b>${s.name}</b>${s.stale ? U.staleTag() : ''}</td>${opts.note ? `<td style="text-align:left;color:var(--ink3);font-family:var(--font)">${s.note || ''}</td>` : ''}
+          return `<tr class="click ${opts.sel && opts.sel() === s.id ? 'sel' : ''}" data-id="${s.id}"><td class="muted">${g}</td><td style="text-align:left"><b>${s.name}</b>${s.secid ? `<div class="hint">${U.esc(s.secid)}${s.provider_name && s.provider_name !== s.name ? ' · ' + U.esc(s.provider_name) : ''}</div>` : ''}${s.stale ? U.staleTag() : ''}</td>${opts.note ? `<td style="text-align:left;color:var(--ink3);font-family:var(--font)">${s.note || ''}</td>` : ''}
             <td>${U.fmtNum(p.last, s.nd ?? 2)}${s.unit ? `<span class="muted small"> ${s.unit}</span>` : ''}</td><td class="${stale ? 'muted' : ''}">${p.date.slice(5)}</td>
             ${keys.map(([k, , sc]) => `<td class="hc" style="${heat(p[k], sc/100)}">${fmtP(p[k])}</td>`).join('')}<td class="${p.last/hi1 - 1 < -0.1 ? 'neg' : ''}">${fmtP(p.last/hi1 - 1)}</td></tr>`; }).join('')}
         </tbody></table>${sortK ? '<div class="hint"><a href="javascript:void 0" data-unsort>恢复按地区排列</a></div>' : ''}`;
@@ -50,7 +50,7 @@ const Pages3 = (() => {
     try { await U.need('data/world.js'); } catch(e){ return fail(app, e, '全球股指'); }
     const L = WD.indices; let sel = 'SPX'; const st = { rng: 'YTD', h: 300 };
     const newest = L.map(s => U.last(s.d)).sort().pop();
-    app.innerHTML = head('全球股市', `${L.length} 个主要指数，日线收盘（本地货币，不含分红） · ${U.fresh(WD.indices_asof || newest, { session: WD.session, partial: L.filter(s => s.stale).length })}`, `数据来自东方财富行情接口，各市场收盘时间不同：亚洲先收，美国最后。表里“日期”是这个指数最近一个收盘日；如果抓取时某个市场还在交易，最后一天会是盘中价。<br><br>“距 1 年高点”：现价比过去一年最高收盘低多少，超过 10% 标红。颜色越深，涨跌越大。`) +
+    app.innerHTML = head('全球股市', `${L.length} 个主要指数。每一行的日期是这一行自己的最近收盘，不是抓取日，也不是旁边另一条指数的日期。`, `数据来自东方财富行情接口，各市场收盘时间不同：亚洲先收，美国最后。名称下面有代码的，是供应商 secid。100.NDX 和 100.NDX100 是两个代码，名称各用供应商返回的那一个，不把 100.NDX 写成纳斯达克 100。<br><br>表里“日期”是这个指数最近一个收盘日；如果抓取时某个市场还在交易，最后一天会是盘中价。表中最晚一条是 ${newest}。<br><br>“距 1 年高点”：现价比过去一年最高收盘低多少，超过 10% 标红。颜色越深，涨跌越大。`) +
       `<div class="mk-grid">${panel('', '主要指数表现', '点表头排序，点一行在下图加粗', '<div id="w-t" class="tablewrap"></div>', '', 'full')}${panel('', '走势对比', '起点 = 0%', '<div id="w-c"></div>', '', 'full')}</div>`;
     const t = perfTable(U.$('#w-t'), L, { newest, sel: () => sel, onSel: id => { sel = id; normChart(U.$('#w-c'), L, sel, st); } });
     normChart(U.$('#w-c'), L, sel, st);

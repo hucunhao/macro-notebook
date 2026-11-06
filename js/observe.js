@@ -284,7 +284,7 @@ const Observe = (() => {
     const top = document.createElement('div');
     top.innerHTML = `
       <h1>全部指标</h1>
-      <p class="muted small">这里是所有指标的完整版。每天先看“总览”，想深入再来这里。数据截至美股 ${MS.meta.newest} 收盘（数据生成于 ${MS.meta.generated} 台北时间）。</p>
+      <p class="muted small">这里是所有指标的完整版。每天先看“总览”，想深入再来这里。${MS.meta.equity_label || ('数据截至美股 ' + MS.meta.newest)}。生成于 ${MS.meta.generated}（台北时间）。</p>
       <div class="card verdict ${C.overall}" id="verdict">
         <div class="muted small">市场阶段</div>
         <div class="stage"><span class="light ${C.overall}"></span>${C.stage}</div>

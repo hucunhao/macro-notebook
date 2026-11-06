@@ -117,9 +117,23 @@ def em_kline(secid, beg='20100101'):
         except ValueError: pass
     return d.get('name'), rows, st
 
+def published_index_name(provider_name, requested_name=None, secid=None):
+    """100.NDX 和 100.NDX100 的显示名只用东方财富返回的 name。
+
+    供应商没给名字就返回 None，不用请求里写的称呼顶上，也不把 100.NDX 写成「纳斯达克 100」。
+    其它指数仍用表里的称呼；这次要修的是已经核对过的那两个代码。
+    """
+    force = secid in ('100.NDX', '100.NDX100')
+    requested = '' if requested_name is None else str(requested_name)
+    provider = '' if provider_name is None else str(provider_name).strip()
+    if force or ('100' in requested and provider and '100' not in provider):
+        return provider or None
+    return requested_name
+
 # ---------------------------------------------------------------- 1. 全球股指 + 商品汇率
-WORLD = [  # (id, secid, 中文名, 地区, 时区标签)
-    ('SPX', '100.SPX', '标普 500', '美国'), ('NDX', '100.NDX', '纳斯达克 100', '美国'), ('DJIA', '100.DJIA', '道琼斯工业', '美国'),
+# 100.NDX 的供应商名称不是纳斯达克 100。100.NDX100 才是名称里带 100 的那一个。显示名在抓取时写入。
+WORLD = [  # (id, secid, 表内称呼, 地区)。100.NDX / 100.NDX100 的称呼不会覆盖供应商 name。
+    ('SPX', '100.SPX', '标普 500', '美国'), ('NDX', '100.NDX', '纳斯达克', '美国'), ('NDX100', '100.NDX100', '纳斯达克100', '美国'), ('DJIA', '100.DJIA', '道琼斯工业', '美国'),
     ('SX5E', '100.SX5E', '欧洲斯托克 50', '欧洲'), ('GDAXI', '100.GDAXI', '德国 DAX', '欧洲'), ('FTSE', '100.FTSE', '英国富时 100', '欧洲'), ('FCHI', '100.FCHI', '法国 CAC 40', '欧洲'),
     ('N225', '100.N225', '日经 225', '亚太'), ('KS11', '100.KS11', '韩国 KOSPI', '亚太'), ('TWII', '100.TWII', '台湾加权', '亚太'), ('SENSEX', '100.SENSEX', '印度 SENSEX', '亚太'),
     ('HSI', '100.HSI', '恒生指数', '中国'), ('SSE', '1.000001', '上证指数', '中国'), ('CSI300', '1.000300', '沪深 300', '中国'), ('CYB', '0.399006', '创业板指', '中国'),
@@ -135,12 +149,20 @@ def build_world():
     for key, items in (('indices', WORLD), ('cmdty', CMDTY)):
         olds = {o['id']: o for o in old.get(key, [])}
         for it in items:
-            name, rows, st = em_kline(it[1]); time.sleep(0.3)
+            provider_name, rows, st = em_kline(it[1]); time.sleep(0.3)
             rows = [r for r in rows if r[0] >= '2016-01-01']
-            if rows:
-                o = dict(id=it[0], name=it[2], group=it[3], d=[r[0] for r in rows], v=[round(r[1], 4) for r in rows])
+            shown = published_index_name(provider_name, it[2], it[1]) if key == 'indices' else (it[2] if rows or it[0] in olds else None)
+            if key == 'indices' and rows and not shown:
+                continue   # 指数没有供应商名称，不发布自拟的「纳斯达克 100」
+            if rows and (key != 'indices' or shown):
+                o = dict(id=it[0], name=shown if key == 'indices' else it[2], group=it[3], d=[r[0] for r in rows], v=[round(r[1], 4) for r in rows])
+                if key == 'indices':
+                    o['secid'] = it[1]
+                    if provider_name and str(provider_name).strip():
+                        o['provider_name'] = str(provider_name).strip()
                 if len(it) > 4: o['unit'] = it[4]
-            elif it[0] in olds:                               # 没有缓存文件：沿用上一版 data/world.json 里的这一条
+            elif it[0] in olds and (key != 'indices' or olds[it[0]].get('provider_name')):
+                # 沿用上一版。指数必须已经带供应商名称，避免把旧的「纳斯达克 100」猜名再写回去。
                 o = {k: v for k, v in olds[it[0]].items() if k != 'stale'}
             else: continue
             # 这次没抓到（用的是缓存或上一版），而且最后一天早于最近一个美股交易日 → 标“未更新”
@@ -482,7 +504,7 @@ def run():
             dump(name, var, obj)
             meta[name] = f"ok {n_new} 条，沿用旧数据 {obj.get('stale_n', 0)} 条，数据截至 {obj.get('asof')}"
             if name == 'world':   # 首页行情条用的小文件：每条只留最近 30 个交易日
-                dump('snap', 'SNAP', {k: [dict(id=o['id'], name=o['name'], group=o['group'], d=o["d"][-30:], v=o["v"][-30:], **({'stale': True} if o.get('stale') else {})) for o in obj[k]] for k in ('indices', 'cmdty')})
+                dump('snap', 'SNAP', {k: [dict(id=o['id'], name=o['name'], group=o['group'], d=o["d"][-30:], v=o["v"][-30:], **({'secid': o['secid']} if o.get('secid') else {}), **({'provider_name': o['provider_name']} if o.get('provider_name') else {}), **({'stale': True} if o.get('stale') else {})) for o in obj[k]] for k in ('indices', 'cmdty')})
         except Exception as e:
             import traceback; traceback.print_exc()
             meta[name] = f'failed: {e}'   # 失败时 data/{name}.js 保持上一版
