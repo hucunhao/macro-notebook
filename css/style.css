@@ -386,3 +386,34 @@ tr.audit-on td{background:var(--accent-soft);font-weight:600}
   .brief-side{position:static;max-height:none}
   .brief-body{padding:16px 14px 22px}
 }
+/* QDII 上半部：T-1 蓝，EST 橙。文字标签和颜色一起用。 */
+#qdii-mon{--qdm-t1:#4ea4ff;--qdm-est:#ff8a1f;--qdm-warn:#c792ea}
+[data-theme="light"] #qdii-mon{--qdm-t1:#1d4e89;--qdm-est:#c2620a;--qdm-warn:#6b3d86}
+#qdii-mon .qdm-lead{font-size:18px;line-height:1.55;margin:4px 0 12px}
+#qdii-mon .qdm-heroes{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#qdii-mon .qdm-hero{border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;background:var(--panel2)}
+#qdii-mon .qdm-hero h2{margin:0 0 8px;font-size:20px;color:var(--ink)}
+#qdii-mon .qdm-metric{margin-top:8px}
+#qdii-mon .qdm-lab{font-size:14px;font-weight:700;letter-spacing:.02em}
+#qdii-mon .qdm-num{font-family:var(--mono);font-size:40px;font-weight:700;line-height:1.15}
+#qdii-mon .qdm-meta,#qdii-mon .qdm-src{font-size:15px;color:var(--ink2);line-height:1.5}
+#qdii-mon .qdm-t1 .qdm-lab,#qdii-mon .qdm-t1 .qdm-num{color:var(--qdm-t1)}
+#qdii-mon .qdm-est .qdm-lab,#qdii-mon .qdm-est .qdm-num{color:var(--qdm-est)}
+#qdii-mon .qdm-rt .qdm-num{font-size:48px}
+#qdii-mon .qdm-sub{font-size:15px;margin:4px 0}
+#qdii-mon .qdm-legend{font-size:15px;margin:12px 0}
+#qdii-mon .qdm-swatch{display:inline-block;width:14px;height:14px;border-radius:2px;margin:0 4px 0 8px;vertical-align:-2px}
+#qdii-mon .qdm-swatch.t1{background:var(--qdm-t1)}
+#qdii-mon .qdm-swatch.est{background:var(--qdm-est)}
+#qdii-mon .qdm-warn{background:#241830;border:2px solid var(--qdm-warn);border-radius:var(--radius);padding:10px 14px;margin:8px 0 12px}
+[data-theme="light"] #qdii-mon .qdm-warn{background:#f6eefb}
+#qdii-mon .qdm-warn p{margin:0 0 4px;font-size:18px;font-weight:700;color:var(--qdm-warn)}
+#qdii-mon .qdm-calc{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+#qdii-mon .qdm-calc #qdm-drag{font-size:16px}
+#qdii-mon details{margin-top:12px}
+#qdii-mon details > summary{font-size:16px;font-weight:700;color:var(--ink);cursor:pointer}
+#qdii-mon .qdm-fund{border-top:1px solid var(--line);padding:10px 0}
+#qdii-mon .qdm-fund-h{font-size:16px}
+#qdii-mon .qdm-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#qdii-mon .qdm-spot{border:2px solid var(--qdm-t1);border-radius:var(--radius);padding:8px 10px;margin-top:8px}
+#qdii-mon .qdm-more{margin-top:4px}
