@@ -191,7 +191,7 @@ const Pages3 = (() => {
     const navDate = R.map(r => r.date).sort().pop();
     const fp = (x, nd=2) => x == null ? '—' : `${x > 0 ? '+' : ''}${x.toFixed(nd)}%`;
     const PTIP = `<b>溢价是什么</b>：场内价格比基金实际值（单位净值）贵多少。溢价 10% = 你花 110 元买到 100 元的美股；以后溢价回落，这 10 元就亏掉了，和美股涨跌无关。<br><br><b>怎么算</b>：同一个交易日的收盘价 ÷ 同一天的单位净值 − 1。<br><br><b>为什么总比今天晚</b>：QDII 买的是美股，美股收盘比 A 股晚，基金公司通常在 T+1（有时 T+2）晚上才公布 T 日净值。所以这里的“最新溢价”是净值已经公布的最近一天（现在是 ${navDate}），今天的收盘价要等净值出来才能算。盘中实时溢价要看行情软件的 IOPV（参考净值）。<br><br>颜色：3% 以下绿，3–5% 黄，5–10% 红，10% 以上深红。<span class="warnt">这几条线是常用经验值，不是检验过的规则。</span><br>LOF 用 A 类人民币份额的净值；ETF 和 LOF 的收盘价不复权。`;
-    app.innerHTML = head('QDII 溢价', `国内上市的纳指 100、标普 500 场内基金，每天的收盘溢价 · ${U.fresh(QD.asof || navDate, { session: QD.session, partial: F.filter(f => f.stale).length })}`, PTIP) +
+    app.innerHTML = (window.QdiiMon ? QdiiMon.html() : '') + head('QDII 溢价', `下面这张是收盘价 ÷ 公布净值，和上面的 T-1、EST 不是同一列 · ${U.fresh(QD.asof || navDate, { session: QD.session, partial: F.filter(f => f.stale).length })}`, PTIP) +
       `<div class="chips"><div class="chip"><div class="k">纳指 100 · 中位溢价（${grp('纳指100').length} 只）</div><div class="v ${lvl(U.median(grp('纳指100'))).replace('rr', 'r')}">${fp(U.median(grp('纳指100')), 1)}</div><div class="hint">最低 ${fp(Math.min(...grp('纳指100')), 1)} · 最高 ${fp(Math.max(...grp('纳指100')), 1)}</div></div>
         <div class="chip"><div class="k">标普 500 · 中位溢价（${grp('标普500').length} 只）</div><div class="v ${lvl(U.median(grp('标普500'))).replace('rr', 'r')}">${fp(U.median(grp('标普500')), 1)}</div><div class="hint">最低 ${fp(Math.min(...grp('标普500')), 1)} · 最高 ${fp(Math.max(...grp('标普500')), 1)}</div></div>
         <div class="chip"><div class="k">净值日期</div><div class="v" style="font-size:18px">${navDate}</div><div class="hint">溢价按这一天的收盘价和净值算 ${U.info(PTIP)}</div></div>
@@ -229,6 +229,7 @@ const Pages3 = (() => {
         hlines: [{ y:3, color:U.css('--y') }, { y:5 }, { y:10 }, { y:0, color:U.css('--ink3'), dash:false }], axisFmt: v => v.toFixed(0) + '%', fmt: v => v == null ? '—' : fp(v) });
     }
     table(); chart(); groups();
+    if (window.QdiiMon) QdiiMon.bind(app);
     const slot = U.$('#qdii-exec-slot');
     if (slot) QdiiExec.mount(slot, Observe.compute(Settings.get()).tiers);
   }

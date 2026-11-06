@@ -1,0 +1,67 @@
+# A 股收盘之后抓一次 QDII 公开网页。不跑整套宏观数据。
+# qdiilimit 页面上写的生成时间大约是 15:30（台北）。16:15 再抓，避开盘中。
+name: QDII 溢价快照
+
+on:
+  schedule:
+    - cron: '15 8 * * 1-5'   # 16:15 台北，周一到周五
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: update-qdii
+  cancel-in-progress: false
+
+jobs:
+  snap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: 抓 qdiilimit 和 palmmicro（各一页）
+        run: python3 qdii_monitor.py
+      - name: 提交快照
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          msg="QDII 溢价快照 $(TZ=Asia/Taipei date +%Y-%m-%d)"
+          for attempt in 1 2 3; do
+            git fetch --depth=50 origin main
+            tmp=$(mktemp -d)
+            cp -r data/qdii_monitor.js data/qdii_monitor.json "$tmp/" 2>/dev/null || true
+            if [ -d content/qdii ]; then mkdir -p "$tmp/content"; cp -r content/qdii "$tmp/content/"; fi
+            git reset -q --hard origin/main
+            cp "$tmp"/qdii_monitor.js "$tmp"/qdii_monitor.json data/ 2>/dev/null || true
+            if [ -d "$tmp/content/qdii" ]; then rm -rf content/qdii && mkdir -p content && cp -r "$tmp/content/qdii" content/; fi
+            rm -rf "$tmp"
+            git add -A data/qdii_monitor.js data/qdii_monitor.json content/qdii
+            if git diff --cached --quiet; then
+              echo "没有变化"; echo "pushed=false" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            git commit -q -m "$msg"
+            if git push origin HEAD:main; then
+              echo "pushed=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            echo "推送被拒，第 $attempt 次重试"; sleep $((attempt * 5))
+          done
+          echo "::error::推送 3 次都失败"; exit 1
+      - name: 让 GitHub Pages 重新发布
+        if: steps.commit.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bt=$(gh api "repos/${{ github.repository }}/pages" --jq .build_type)
+          if [ "$bt" = "legacy" ]; then
+            gh api -X POST "repos/${{ github.repository }}/pages/builds" --jq .status
+          else
+            echo "::warning::Pages build_type=$bt，这一步没有触发发布。"
+          fi

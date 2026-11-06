@@ -97,9 +97,12 @@ jobs:
             git fetch --depth=50 origin main
             # 以 main 的最新版本为底，只换上这次生成的 data/（数据以这次为准，代码以 main 为准），不会再出现 rebase 冲突
             tmp=$(mktemp -d); cp -r data "$tmp/"
+            if [ -d content/qdii ]; then mkdir -p "$tmp/content"; cp -r content/qdii "$tmp/content/"; fi
             git reset -q --hard origin/main
-            rm -rf data && cp -r "$tmp/data" data && rm -rf "$tmp"
-            git add -A data/
+            rm -rf data && cp -r "$tmp/data" data
+            if [ -d "$tmp/content/qdii" ]; then rm -rf content/qdii && mkdir -p content && cp -r "$tmp/content/qdii" content/; fi
+            rm -rf "$tmp"
+            git add -A data/ content/qdii
             if git diff --cached --quiet; then
               echo "没有变化"; echo "pushed=false" >> "$GITHUB_OUTPUT"; exit 0
             fi
