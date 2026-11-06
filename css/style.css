@@ -412,8 +412,13 @@ tr.audit-on td{background:var(--accent-soft);font-weight:600}
 #qdii-mon .qdm-calc #qdm-drag{font-size:16px}
 #qdii-mon details{margin-top:12px}
 #qdii-mon details > summary{font-size:16px;font-weight:700;color:var(--ink);cursor:pointer}
-#qdii-mon .qdm-fund{border-top:1px solid var(--line);padding:10px 0}
-#qdii-mon .qdm-fund-h{font-size:16px}
-#qdii-mon .qdm-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-#qdii-mon .qdm-spot{border:2px solid var(--qdm-t1);border-radius:var(--radius);padding:8px 10px;margin-top:8px}
-#qdii-mon .qdm-more{margin-top:4px}
+#qdm-funds .qdm-more{margin:0}
+#qdm-funds .qdm-more > summary{font-size:12.5px;font-weight:600;line-height:20px;color:var(--ink2);padding:0}
+#qdm-funds td{font-size:12.5px;line-height:20px;padding:3px 6px}
+#qdm-funds .qdm-k{font-weight:700;margin-right:4px}
+#qdm-funds .qdm-badge{font-family:var(--mono);font-weight:700;font-size:12.5px;line-height:20px;padding:0 6px;border-radius:var(--radius)}
+#qdm-funds .qdm-t1 .qdm-k,#qdm-funds .qdm-t1 .qdm-badge{color:var(--qdm-t1)}
+#qdm-funds .qdm-est .qdm-k,#qdm-funds .qdm-est .qdm-badge{color:var(--qdm-est)}
+#qdm-funds tr.qdm-spot{outline:2px solid var(--qdm-t1);outline-offset:-2px}
+#qdm-funds td.qdm-fold{white-space:normal}
+#qdm-funds .qdm-extra{font-size:12.5px;line-height:20px;color:var(--ink2);white-space:normal;padding:2px 0 4px}

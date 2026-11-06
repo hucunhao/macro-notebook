@@ -77,7 +77,62 @@ async function onQdii(shots) {
     const vals = [f.t1_premium, f.official_premium, f.ref_premium, f.rt_premium];
     if (new Set(vals).size !== 4) fail(`${code} 四列溢价不是互不相同`);
   }
-  if (shots && shotOpen) await page.locator('#qdm-funds').screenshot({ path: shotOpen });
+  const metrics = await page.evaluate(() => {
+    const cs = el => getComputedStyle(el);
+    const box = el => el.getBoundingClientRect();
+    const oldTd = document.querySelector('#q-t tbody td');
+    const oldPrem = document.querySelector('#q-t .prem');
+    const oldTr = document.querySelector('#q-t tbody tr');
+    const row = document.querySelector('#qdm-funds tr.qdm-row:not(.qdm-spot)');
+    const spot = document.querySelector('#qdm-funds tr.qdm-spot');
+    const td = row.querySelector('td');
+    const badge = row.querySelector('.qdm-t1 .qdm-badge');
+    const rt = row.querySelector('.qdm-est .qdm-badge');
+    const name = row.querySelector('.qdm-name');
+    const code = row.querySelector('.qdm-code');
+    const swatchT1 = document.querySelector('#qdii-mon .qdm-swatch.t1');
+    const swatchEst = document.querySelector('#qdii-mon .qdm-swatch.est');
+    const fits = el => el.scrollWidth <= el.clientWidth + 1 && box(el).height > 8 && box(el).width > 8;
+    return {
+      oldTdFont: cs(oldTd).fontSize, oldTdPad: cs(oldTd).padding, oldTdLh: cs(oldTd).lineHeight,
+      oldPremFont: cs(oldPrem).fontSize, oldPremWeight: cs(oldPrem).fontWeight, oldPremPad: cs(oldPrem).padding,
+      oldRowH: box(oldTr).height,
+      oldInputH: box(document.querySelector('#q-t input')).height,
+      tdFont: cs(td).fontSize, tdPad: cs(td).padding, tdLh: cs(td).lineHeight,
+      badgeFont: cs(badge).fontSize, badgeWeight: cs(badge).fontWeight, badgePad: cs(badge).padding,
+      rowH: box(row).height, spotH: box(spot).height, spotOutline: cs(spot).outlineWidth,
+      heroFont: cs(document.querySelector('#qdm-nasdaq .qdm-t1 .qdm-num')).fontSize,
+      heroRtFont: cs(document.querySelector('#qdm-nasdaq .qdm-rt .qdm-num')).fontSize,
+      leadFont: cs(document.querySelector('#qdm-lead')).fontSize,
+      t1Color: cs(badge).color, rtColor: cs(rt).color,
+      swatchT1: cs(swatchT1).backgroundColor, swatchEst: cs(swatchEst).backgroundColor,
+      labelT1: row.querySelector('.qdm-t1 .qdm-k').textContent,
+      labelRt: row.querySelector('.qdm-est .qdm-k').textContent,
+      fits: fits(badge) && fits(rt) && fits(name) && fits(code),
+      spotText: spot.textContent,
+    };
+  });
+  console.log('MEASURED ' + JSON.stringify(metrics));
+  if (metrics.tdFont !== metrics.oldTdFont || metrics.tdPad !== metrics.oldTdPad || metrics.tdLh !== metrics.oldTdLh) {
+    fail(`分项行字号或内边距和旧表不一致：${metrics.tdFont}/${metrics.tdPad}/${metrics.tdLh} vs ${metrics.oldTdFont}/${metrics.oldTdPad}/${metrics.oldTdLh}`);
+  }
+  if (metrics.badgeFont !== metrics.oldPremFont || metrics.badgeWeight !== metrics.oldPremWeight || metrics.badgePad !== metrics.oldPremPad) {
+    fail(`溢价徽章和旧表 .prem 不一致：${metrics.badgeFont} ${metrics.badgeWeight} ${metrics.badgePad} vs ${metrics.oldPremFont} ${metrics.oldPremWeight} ${metrics.oldPremPad}`);
+  }
+  if (Math.abs(metrics.rowH - metrics.oldRowH) > 4) fail(`分项行高 ${metrics.rowH}px，旧表行高 ${metrics.oldRowH}px`);
+  if (Math.abs(metrics.spotH - metrics.rowH) > 2) fail(`159659 行高 ${metrics.spotH}px，被边框撑高了`);
+  if (metrics.spotOutline !== '2px') fail(`159659 边框不是 2px：${metrics.spotOutline}`);
+  if (metrics.spotText.includes('不是持仓') || metrics.spotText.includes('关注代码')) fail('159659 多了说明文字');
+  if (metrics.heroFont !== '40px' || metrics.heroRtFont !== '48px' || metrics.leadFont !== '18px') fail(`上半部字号被改了：${metrics.heroFont} ${metrics.heroRtFont} ${metrics.leadFont}`);
+  if (metrics.labelT1 !== 'T-1' || metrics.labelRt !== '实时EST') fail(`标签不对：${metrics.labelT1} / ${metrics.labelRt}`);
+  if (metrics.t1Color !== metrics.swatchT1 || metrics.rtColor !== metrics.swatchEst) fail(`颜色和色块不一致：${metrics.t1Color} ${metrics.rtColor}`);
+  if (!metrics.fits) fail('展开后的代码、名称或溢价被裁切');
+  if (shots && shotOpen) {
+    await page.locator('#qdm-funds').screenshot({ path: shotOpen });
+    const tableShot = shotOpen.replace(/\.png$/, '') + '-old-table.png';
+    await page.locator('#q-t table').screenshot({ path: tableShot });
+    console.log('SHOT_TABLE ' + tableShot);
+  }
   const before = await page.locator('#qdm-drag').innerText();
   if (!before.includes('71.1')) fail(`计算器默认结果不是例子里的 71.1%：${before}`);
   await page.locator('#qdm-buy').fill('0');
