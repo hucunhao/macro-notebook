@@ -7,14 +7,18 @@ const QdiiMon = (() => {
   function drag(buy, nav, years, exitP){
     const b = buy / 100, r = nav / 100, e = exitP / 100, n = +years;
     if (!(n > 0) || [b, r, e].some(x => !isFinite(x))) return null;
-    const mult = Math.pow(1 + r, n) * (1 + e) / (1 + b);
+    const navMult = Math.pow(1 + r, n);
+    const mult = navMult * (1 + e) / (1 + b);
+    const vs = (1 + e) / (1 + b) - 1;
     const one = x => Math.round(x * 1000) / 10;
-    return { cum: one(mult - 1), ann: one(Math.pow(mult, 1 / n) - 1), vs: one((1 + e) / (1 + b) - 1) };
+    return { cum: one(mult - 1), ann: one(Math.pow(mult, 1 / n) - 1), vs: one(vs),
+      multiple: Math.round(mult * 1000) / 1000, navMultiple: Math.round(navMult * 1000) / 1000, shortfall: one(-vs) };
   }
   function themeLine(block, label){
     if (!block) return '';
     const spread = block.n >= 2 ? `极差 ${fp(block.spread, 2)}（最高 ${fp(block.max, 2)}，最低 ${fp(block.min, 2)}）` : '不足 2 只，不算极差';
-    return `<div class="chip"><div class="k">${label}</div><div class="v">${fp(block.median, 2)}</div><div class="hint">${block.n} 只有数，${block.missing} 只没有。${spread}</div></div>`;
+    const stale = block.stale_n ? ` ${block.stale_n} 只沿用上次，不把这格当成刚更新。` : '';
+    return `<div class="chip"><div class="k">${label}</div><div class="v">${fp(block.median, 2)}</div><div class="hint">${block.n} 只有数，${block.missing} 只没有。${spread}${stale}</div></div>`;
   }
   function html(){
     const D = window.QDM;
@@ -23,7 +27,10 @@ const QdiiMon = (() => {
       const when = D && D.last_success ? `上次成功 ${U.esc(D.last_success)}` : '没有上次成功的时间';
       return `<section class="panel"><div class="ph"><span class="t">QDII 溢价监视</span><span class="s">不是投资建议</span></div><div class="pb"><p>表是空的，不是零溢价。${when}。${err}</p></div></section>`;
     }
-    const err = D.update_error ? `<p class="hint">这次更新失败（${U.esc(D.update_error)}）。下面仍是上次成功的数据，时间 ${U.esc(D.last_success || '—')}。</p>` : '';
+    const err = D.update_error ? `<p class="hint">${U.esc(D.update_error)}</p>` : '';
+    const headWhen = D.partial
+      ? `整表上次全部成功 ${U.esc(D.last_success || '—')}，这次有代码沿用旧数，成功时间不往前拨`
+      : `九只目标都是这次的数字 · ${U.esc(D.last_success || '—')}`;
     const src = D.sources || {};
     const days = D.history_days || {};
     const gap = ['t1', 'official', 'ref', 'rt'].map(k => `${{t1:'T-1', official:'官方EST', ref:'参考EST', rt:'实时EST'}[k]} ${days[k] || 0} 个不同日期`).join('，');
@@ -32,7 +39,7 @@ const QdiiMon = (() => {
       return themeLine(th.t1, `${th.name} · T-1 中位数`) + themeLine(th.rt, `${th.name} · 实时EST溢价中位数`) + themeLine(th.official, `${th.name} · 官方EST溢价中位数`);
     }).join('');
     const rows = D.funds.map(f => `<tr>
-      <td><b>${U.esc(f.code)}</b></td>
+      <td><b>${U.esc(f.code)}</b>${f.stale ? `<div class="hint">沿用上次 ${U.esc(f.last_success || '—')}</div>` : (f.last_success ? `<div class="hint">本次 ${U.esc(f.last_success)}</div>` : '')}</td>
       <td style="text-align:left">${U.esc(f.name || '')}<div class="hint">${U.esc(f.theme_name || '')}</div></td>
       <td>${fp(f.t1_premium)}</td><td>${U.esc(f.t1_nav_date || '—')}</td>
       <td>${num(f.official_est)}</td><td>${fp(f.official_premium)}</td><td>${U.esc(f.est_date || '—')}</td>
@@ -41,7 +48,7 @@ const QdiiMon = (() => {
       <td>${num(f.price)}</td><td>${U.esc([f.price_date, f.price_time].filter(Boolean).join(' ') || '—')}</td>
       <td>${U.esc(SUB[f.subscription] || '未知')}<div class="hint">${U.esc(f.subscription_detail || '')}</div></td>
     </tr>`).join('');
-    return `<section class="panel" id="qdii-mon"><div class="ph"><span class="t">QDII 溢价监视</span><span class="s">不是投资建议 · 上次成功 ${U.esc(D.last_success || D.generated || '—')}（台北时间）</span></div><div class="pb">
+    return `<section class="panel" id="qdii-mon"><div class="ph"><span class="t">QDII 溢价监视</span><span class="s">不是投资建议 · ${headWhen}（台北时间）</span></div><div class="pb">
       ${err}
       <p class="small" style="margin-top:0">T-1 和 EST 各看各的，不写成「从高到低」的一个区间。${U.esc((src.t1 || {}).definition || '')}</p>
       <p class="small">${U.esc((src.est || {}).definition || '')}</p>
@@ -68,7 +75,7 @@ const QdiiMon = (() => {
         <label>卖出溢价 % <input id="qdm-exit" type="number" step="0.1" value="0" style="width:5em"></label>
       </div>
       <p id="qdm-drag" class="small"></p>
-      <p class="hint">到期倍数 = (1+净值年化)^年数 × (1+卖出溢价) / (1+买入溢价)。相对按净值买再按净值卖，少掉的比例 = (1+卖出溢价)/(1+买入溢价) − 1。15%、7%、10 年、0% 大约是累计 +71%、年化 5.5%，期末大约少 13%。</p>
+      <p class="hint">期末财富倍数 = (1+净值年化)^年数 × (1+卖出溢价) / (1+买入溢价)。相对按净值买入的期末财富缺口 = 1 − (1+卖出溢价)/(1+买入溢价)。净值年化填的是这只基金净值的年化假设，不是指数的年化收益。15%、7%、10 年、0% 的例子：累计 +71.1%，年化 5.5%，期末倍数约 1.711，相对按净值买入的期末财富缺口 13.0%。</p>
     </div></section>`;
   }
   function histPoints(field, who){
@@ -114,7 +121,7 @@ const QdiiMon = (() => {
     const el = U.$('#qdm-drag');
     if (!r){ el.textContent = '年数要大于 0。'; return; }
     const sign = x => (x > 0 ? '+' : '') + x.toFixed(1) + '%';
-    el.innerHTML = `累计收益 <b>${sign(r.cum)}</b>，年化 <b>${sign(r.ann)}</b>。和按净值买相比，期末大约 <b>${sign(r.vs)}</b>（负的就是更少）。`;
+    el.innerHTML = `累计收益 <b>${sign(r.cum)}</b>，年化 <b>${sign(r.ann)}</b>。期末财富倍数 <b>${r.multiple.toFixed(3)}</b>（按净值买的期末倍数 ${r.navMultiple.toFixed(3)}）。相对按净值买入的期末财富缺口 <b>${r.shortfall.toFixed(1)}%</b>。`;
   }
   function bind(root){
     if (!root.querySelector('#qdii-mon')) return;

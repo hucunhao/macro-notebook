@@ -141,14 +141,70 @@ def _median(xs):
     n = len(xs); m = n // 2
     return xs[m] if n % 2 else round((xs[m - 1] + xs[m]) / 2, 4)
 
+# 这些格子上次若是数字，这次变成空，就不能把该代码当成这次更新成功。
+TRACKED_NUMBERS = ('t1_premium', 'official_est', 'official_premium', 'ref_est', 'ref_premium', 'rt_est', 'rt_premium', 'price')
+TRACKED_TEXT = ('t1_nav_date', 't1_title', 'est_date', 'price_date', 'price_time')
+
 def theme_block(funds, key):
     xs = [f.get(key) for f in funds]
-    known = [x for x in xs if x is not None]
+    known = [x for x in xs if isinstance(x, (int, float))]
+    stale_n = sum(1 for f in funds if f.get('stale'))
     if not known:
-        return dict(median=None, min=None, max=None, spread=None, n=0, missing=len(xs))
+        return dict(median=None, min=None, max=None, spread=None, n=0, missing=len(xs), stale_n=stale_n)
     lo, hi = min(known), max(known)
     return dict(median=_median(known), min=lo, max=hi, spread=round(hi - lo, 4) if len(known) >= 2 else None,
-                n=len(known), missing=len(xs) - len(known))
+                n=len(known), missing=len(xs) - len(known), stale_n=stale_n)
+
+def themes_for(funds):
+    themes = {}
+    for key, name in THEME_NAME.items():
+        group = [f for f in funds if f['theme'] == key]
+        themes[key] = dict(name=name, n_listed=len(group),
+                           t1=theme_block(group, 't1_premium'),
+                           official=theme_block(group, 'official_premium'),
+                           ref=theme_block(group, 'ref_premium'),
+                           rt=theme_block(group, 'rt_premium'))
+    return themes
+
+def _numbers(row):
+    if not row: return set()
+    return {k for k in TRACKED_NUMBERS if isinstance(row.get(k), (int, float))}
+
+def reconcile_targets(funds, old_snapshot, fetched):
+    """九只目标代码任一缺失，或上次有数字的格子这次变空：沿用该代码上次的非空快照。
+
+    不把空写成 0。整表 last_success 只有九只都是这次的新数字才往前拨。
+    返回 (funds, full_success, problem_codes)。
+    """
+    old_by = {f.get('code'): f for f in (old_snapshot or {}).get('funds') or [] if f.get('code')}
+    out, problems = [], []
+    for f in funds:
+        old = old_by.get(f['code'])
+        lost = sorted(k for k in _numbers(old) if f.get(k) is None)
+        fresh_numbers = _numbers(f)
+        if lost or not fresh_numbers:
+            kept = dict(f)
+            if old and _numbers(old):
+                for k in TRACKED_NUMBERS + TRACKED_TEXT:
+                    if k in old: kept[k] = old[k]
+                kept['name'] = old.get('name') or kept.get('name')
+                kept['last_success'] = old.get('last_success')
+                kept['stale_reason'] = '这次来源没有这只' if not fresh_numbers else '这次缺 ' + '、'.join(lost)
+            else:
+                for k in TRACKED_NUMBERS:
+                    if kept.get(k) is None: kept[k] = None   # 明确留空，不补 0
+                kept['last_success'] = None
+                kept['stale_reason'] = '来源没有这只，也没有上次的数字可沿用'
+            kept['stale'] = True
+            problems.append(f['code'])
+            out.append(kept)
+            continue
+        fresh = dict(f)
+        fresh['stale'] = False
+        fresh['last_success'] = fetched
+        fresh.pop('stale_reason', None)
+        out.append(fresh)
+    return out, not problems, problems
 
 def build_snapshot(t1, est, fetched):
     funds = []
@@ -170,16 +226,8 @@ def build_snapshot(t1, est, fetched):
             subscription='unknown',
             subscription_detail='qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。',
         ))
-    themes = {}
-    for key, name in THEME_NAME.items():
-        group = [f for f in funds if f['theme'] == key]
-        themes[key] = dict(name=name, n_listed=len(group),
-                           t1=theme_block(group, 't1_premium'),
-                           official=theme_block(group, 'official_premium'),
-                           ref=theme_block(group, 'ref_premium'),
-                           rt=theme_block(group, 'rt_premium'))
     return dict(
-        version=1, generated=fetched, tz='Asia/Taipei', last_success=fetched, update_error=None,
+        version=1, generated=fetched, tz='Asia/Taipei', last_success=None, update_error=None, partial=False,
         advice=False,
         note='监视工具，不是买卖建议。T-1 和 EST 分列，不写成一个区间。',
         sources=dict(
@@ -189,7 +237,7 @@ def build_snapshot(t1, est, fetched):
             est=dict(name='palmmicro qdiicn.php', url=URL_EST,
                      definition='同一行三列：官方EST、参考EST、实时EST，各自有溢价。溢价用的价格见同一页「参考数据」里的价格、日期和时间，是 A 股时点的快照。页面没有公布「前净值×(1+指数涨跌)×(1+汇率涨跌)」，本站不重算，也不把汇率再乘一次。列名「实时」不是本站在持续刷新。'),
         ),
-        funds=funds, themes=themes,
+        funds=funds, themes=themes_for(funds),
         history_gap='T-1 和 EST 只积累本站抓到的观察。不足 30 个交易日时，图下面写明还差多少。收盘价÷公布净值的较长历史在原来的溢价图里，定义不同，不能当成这两列的过去。',
     )
 
@@ -200,6 +248,7 @@ def new_observations(snapshot):
     out = []
     fetched = snapshot['generated']
     for f in snapshot['funds']:
+        if f.get('stale'): continue   # 沿用的旧数字不再记成一次新观察
         if f.get('t1_premium') is not None:
             out.append(dict(source='qdiilimit', code=f['code'], theme=f['theme'], field='t1',
                             value=f['t1_premium'], asof=f.get('t1_nav_date'), fetched=fetched))
@@ -232,14 +281,20 @@ def drag(buy_premium, nav_annual, years, exit_premium):
     b, r, e, n = float(buy_premium), float(nav_annual), float(exit_premium), float(years)
     if n <= 0: raise ValueError('years')
     mult = (1 + r) ** n * (1 + e) / (1 + b)
-    return dict(cumulative=mult - 1, annualized=mult ** (1 / n) - 1, wealth_vs_nav=(1 + e) / (1 + b) - 1)
+    nav_mult = (1 + r) ** n
+    vs = (1 + e) / (1 + b) - 1
+    return dict(cumulative=mult - 1, annualized=mult ** (1 / n) - 1, wealth_vs_nav=vs,
+                ending_multiple=mult, nav_ending_multiple=nav_mult)
 
 def format_drag(result):
-    """给页面用的四舍五入：累计和相对净值各 1 位百分数，年化 1 位。"""
+    """给页面用的四舍五入：累计、缺口各 1 位百分数，年化 1 位，期末倍数 3 位。"""
     def one(x):
         return round(x * 1000) / 10   # 一位小数的百分数，避开二进制尾数
     return dict(cumulative_pct=one(result['cumulative']), annualized_pct=one(result['annualized']),
-                wealth_vs_nav_pct=one(result['wealth_vs_nav']))
+                wealth_vs_nav_pct=one(result['wealth_vs_nav']),
+                ending_multiple=round(result['ending_multiple'], 3),
+                nav_ending_multiple=round(result['nav_ending_multiple'], 3),
+                shortfall_pct=one(-result['wealth_vs_nav']))
 
 def load_json(path):
     try:
@@ -281,6 +336,22 @@ def keep_failure(message, fetched):
     write_outputs(old, hist)
     return f'kept previous: {message}'
 
+def apply_parsed_update(t1, est, old, fetched):
+    """用这次解析结果更新快照。其它代码再多，也不代替九只目标。"""
+    snap = build_snapshot(t1, est, fetched)
+    funds, full, problems = reconcile_targets(snap['funds'], old, fetched)
+    snap['funds'] = funds
+    snap['themes'] = themes_for(funds)
+    snap['last_attempt'] = fetched
+    snap['partial'] = not full
+    if full:
+        snap['last_success'] = fetched
+        snap['update_error'] = None
+    else:
+        snap['last_success'] = (old or {}).get('last_success')
+        snap['update_error'] = '这些代码这次没有完整数字，已沿用上次非空快照，整表成功时间不往前拨：' + '、'.join(problems)
+    return snap
+
 def run(fetch_html=None):
     fetched = taipei_now()
     try:
@@ -292,12 +363,15 @@ def run(fetch_html=None):
             t1_html = fetch(URL_T1)
             est_html = fetch(URL_EST)
         t1, est = parse_qdiilimit(t1_html), parse_palmmicro(est_html)
-        if len(t1['funds']) < 5 or len(est['est']) < 5:
-            raise RuntimeError(f'解析太少：T-1 {len(t1["funds"])} 只，EST {len(est["est"])} 只')
-        snap = build_snapshot(t1, est, fetched)
+        if not t1['funds'] and not est['est']:
+            raise RuntimeError('两页都没有解析出基金')
+        old = load_json(LATEST)
+        snap = apply_parsed_update(t1, est, old, fetched)
+        # 沿用的旧行不写进历史。整表没全部成功时，历史里也不记这次的时间当整表成功。
         hist, added = merge_history(load_json(HISTORY), new_observations(snap))
         write_outputs(snap, hist)
-        return f'ok T-1 {sum(f["t1_premium"] is not None for f in snap["funds"])}/9，EST实时 {sum(f["rt_premium"] is not None for f in snap["funds"])}/9，历史新增 {added}'
+        fresh_n = sum(1 for f in snap['funds'] if not f.get('stale'))
+        return f"{'ok' if not snap['partial'] else 'partial'} 本次新数字 {fresh_n}/9，沿用 {9 - fresh_n}，历史新增 {added}，整表成功时间 {snap.get('last_success')}"
     except Exception as e:
         return keep_failure(str(e), fetched)
 

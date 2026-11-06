@@ -61,6 +61,9 @@ class Monitor(unittest.TestCase):
         self.assertEqual(shown['cumulative_pct'], 71.1)
         self.assertEqual(shown['annualized_pct'], 5.5)
         self.assertEqual(shown['wealth_vs_nav_pct'], -13.0)
+        self.assertEqual(shown['ending_multiple'], 1.711)
+        self.assertEqual(shown['nav_ending_multiple'], 1.967)
+        self.assertEqual(shown['shortfall_pct'], 13.0)
         nav_only = (1.07 ** 10) - 1
         self.assertGreater(nav_only, raw['cumulative'])
 
@@ -93,6 +96,7 @@ class Monitor(unittest.TestCase):
         try:
             t1 = Q.parse_qdiilimit(T1_HTML)
             snap = Q.build_snapshot(t1, Q.parse_palmmicro(EST_HTML), '2026-11-06 17:00')
+            snap['last_success'] = '2026-11-06 17:00'
             Q.write_outputs(snap, dict(version=1, observations=[]))
             msg = Q.keep_failure('模拟断网', '2026-11-07 09:00')
             saved = json.loads(Path(Q.LATEST).read_text())
@@ -103,6 +107,76 @@ class Monitor(unittest.TestCase):
             self.assertTrue(saved['funds'])
         finally:
             Q.CONTENT, Q.LATEST, Q.HISTORY, Q.DATA_JS, Q.DATA_JSON = old_root_files
+
+
+def _source(codes):
+    t1 = dict(funds={}, page_title='t', generated_on_page='15:30 生成')
+    est = dict(prices={}, est={})
+    want = set(codes)
+    for code, theme, name in Q.WATCH:
+        if code not in want: continue
+        label = '纳斯达克100' if theme == 'nasdaq' else '标普500'
+        t1['funds'][code] = dict(name=name, theme_label=label, t1_premium=10.0, t1_nav_date='2026-11-04', t1_title='前一日收盘价/最新净值-1')
+        est['prices'][code] = dict(price=1.5, price_date='2026-11-06', price_time='15:00', name=name)
+        est['est'][code] = dict(name=name, official_est=1.2, est_date='2026-11-05', official_premium=11.0,
+                                ref_est=1.1, ref_premium=12.0, rt_est=1.15, rt_premium=13.0)
+    for i in range(20):
+        c = f'8{i:05d}'
+        t1['funds'][c] = dict(name='别的基金', theme_label='纳斯达克100', t1_premium=1.0, t1_nav_date='2026-11-04', t1_title='x')
+        est['est'][c] = dict(official_est=1, est_date='2026-11-05', official_premium=1, ref_est=1, ref_premium=1, rt_est=1, rt_premium=1)
+    return t1, est
+
+
+class PartialFailure(unittest.TestCase):
+    def test_absent_target_keeps_previous_and_does_not_advance_success(self):
+        codes = [c for c, _, _ in Q.WATCH]
+        t1, est = _source(codes)
+        self.assertGreaterEqual(len(t1['funds']), 5)   # 别的行很多，以前会因此算成功
+        old = Q.apply_parsed_update(t1, est, None, '2026-11-06 17:00')
+        self.assertFalse(old['partial'])
+        self.assertEqual(old['last_success'], '2026-11-06 17:00')
+        t1, est = _source([c for c in codes if c != '513100'])
+        new = Q.apply_parsed_update(t1, est, old, '2026-11-07 16:20')
+        self.assertTrue(new['partial'])
+        self.assertEqual(new['last_success'], '2026-11-06 17:00')
+        row = next(f for f in new['funds'] if f['code'] == '513100')
+        self.assertTrue(row['stale'])
+        self.assertEqual(row['t1_premium'], 10.0)
+        self.assertEqual(row['rt_premium'], 13.0)
+        self.assertNotEqual(row['t1_premium'], 0)
+        self.assertEqual(row['last_success'], '2026-11-06 17:00')
+        other = next(f for f in new['funds'] if f['code'] == '159941')
+        self.assertFalse(other['stale'])
+        self.assertEqual(other['last_success'], '2026-11-07 16:20')
+        self.assertFalse(any(o['code'] == '513100' for o in Q.new_observations(new)))
+
+    def test_field_turning_none_restores_previous_number(self):
+        codes = [c for c, _, _ in Q.WATCH]
+        old = Q.apply_parsed_update(*_source(codes), None, '2026-11-06 17:00')
+        t1, est = _source(codes)
+        est['est']['159659']['rt_premium'] = None
+        est['est']['159659']['rt_est'] = None
+        new = Q.apply_parsed_update(t1, est, old, '2026-11-07 16:20')
+        row = next(f for f in new['funds'] if f['code'] == '159659')
+        self.assertTrue(row['stale'])
+        self.assertEqual(row['rt_premium'], 13.0)
+        self.assertIsNotNone(row['rt_premium'])
+        self.assertEqual(row['t1_premium'], 10.0)
+        self.assertEqual(new['last_success'], '2026-11-06 17:00')
+        self.assertNotIn(0, (row['rt_premium'], row['t1_premium']))
+
+    def test_recovery_clears_stale_and_advances_success(self):
+        codes = [c for c, _, _ in Q.WATCH]
+        old = Q.apply_parsed_update(*_source(codes), None, '2026-11-06 17:00')
+        t1, est = _source([c for c in codes if c != '513500'])
+        partial = Q.apply_parsed_update(t1, est, old, '2026-11-07 16:20')
+        self.assertTrue(partial['partial'])
+        recovered = Q.apply_parsed_update(*_source(codes), partial, '2026-11-08 16:20')
+        self.assertFalse(recovered['partial'])
+        self.assertIsNone(recovered['update_error'])
+        self.assertEqual(recovered['last_success'], '2026-11-08 16:20')
+        self.assertFalse(any(f.get('stale') for f in recovered['funds']))
+        self.assertTrue(all(f['last_success'] == '2026-11-08 16:20' for f in recovered['funds']))
 
 
 if __name__ == '__main__':
