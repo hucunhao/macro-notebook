@@ -50,7 +50,7 @@ window.QdiiMon = (() => {
     const when = f.stale ? `沿用上次 ${U.esc(f.last_success || '时间未记录')}，不当成刚更新` : (f.last_success ? `本次 ${U.esc(f.last_success)}` : '');
     const spot = f.code === '159659' ? ' qdm-spot' : '';
     return `<article class="qdm-fund${spot}" data-code="${U.esc(f.code)}">
-      <div class="qdm-fund-h"><b>${U.esc(f.code)}</b> ${U.esc(f.name || '')} <span class="qdm-lab">${U.esc(f.theme_name || '')}</span>${f.code === '159659' ? ' <span class="qdm-lab">只把这只代码框出来，不是持仓</span>' : ''}</div>
+      <div class="qdm-fund-h"><b>${U.esc(f.code)}</b> ${U.esc(f.name || '')} <span class="qdm-lab">${U.esc(f.theme_name || '')}</span></div>
       <div class="qdm-pair">
         <div class="qdm-metric qdm-t1"><div class="qdm-lab">T-1</div><div class="qdm-num">${fp(f.t1_premium)}</div><div class="qdm-meta">净值日 ${U.esc(f.t1_nav_date || '—')}。${when}</div></div>
         <div class="qdm-metric ${read.key === 'rt' ? 'qdm-est qdm-rt' : 'qdm-est'}"><div class="qdm-lab">${U.esc(read.label)}</div><div class="qdm-num">${read.block ? fp(read.block.median) : '未知'}</div><div class="qdm-meta">快照 ${U.esc([f.price_date, f.price_time].filter(Boolean).join(' ') || '—')}</div></div>
