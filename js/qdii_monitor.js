@@ -49,18 +49,14 @@ window.QdiiMon = (() => {
     });
     const when = f.stale ? `沿用上次 ${U.esc(f.last_success || '时间未记录')}，不当成刚更新` : (f.last_success ? `本次 ${U.esc(f.last_success)}` : '');
     const spot = f.code === '159659' ? ' qdm-spot' : '';
-    return `<article class="qdm-fund${spot}" data-code="${U.esc(f.code)}">
-      <div class="qdm-fund-h"><b>${U.esc(f.code)}</b> ${U.esc(f.name || '')} <span class="qdm-lab">${U.esc(f.theme_name || '')}</span></div>
-      <div class="qdm-pair">
-        <div class="qdm-metric qdm-t1"><div class="qdm-lab">T-1</div><div class="qdm-num">${fp(f.t1_premium)}</div><div class="qdm-meta">净值日 ${U.esc(f.t1_nav_date || '—')}。${when}</div></div>
-        <div class="qdm-metric ${read.key === 'rt' ? 'qdm-est qdm-rt' : 'qdm-est'}"><div class="qdm-lab">${U.esc(read.label)}</div><div class="qdm-num">${read.block ? fp(read.block.median) : '未知'}</div><div class="qdm-meta">快照 ${U.esc([f.price_date, f.price_time].filter(Boolean).join(' ') || '—')}</div></div>
-      </div>
-      <details class="qdm-more"><summary>官方EST、参考EST 和申购</summary>
-        <p class="qdm-est qdm-sub">官方EST ${num(f.official_est)}，官方溢价 ${fp(f.official_premium)}，EST日期 ${U.esc(f.est_date || '—')}</p>
-        <p class="qdm-est qdm-sub">参考EST ${num(f.ref_est)}，参考溢价 ${fp(f.ref_premium)}</p>
-        <p class="qdm-meta">申购 ${U.esc(({ unknown: '未知', suspended: '暂停', limited: '限额', normal: '正常' })[f.subscription] || '未知')}。${U.esc(f.subscription_detail || '')}</p>
-      </details>
-    </article>`;
+    const estLabel = read.key === 'rt' ? '实时EST' : read.label;
+    return `<tr class="qdm-row${spot}" data-code="${U.esc(f.code)}">
+      <td class="qdm-code"><b>${U.esc(f.code)}</b></td>
+      <td class="qdm-name">${U.esc(f.name || '')}</td>
+      <td class="qdm-t1"><span class="qdm-k">T-1</span><span class="qdm-badge">${fp(f.t1_premium)}</span></td>
+      <td class="${read.key === 'rt' ? 'qdm-est qdm-rt' : 'qdm-est'}"><span class="qdm-k">${U.esc(estLabel)}</span><span class="qdm-badge">${read.block ? fp(read.block.median) : '未知'}</span></td>
+      <td class="qdm-fold"><details class="qdm-more"><summary>官方/参考</summary><div class="qdm-extra">净值日 ${U.esc(f.t1_nav_date || '—')}。${when}。快照 ${U.esc([f.price_date, f.price_time].filter(Boolean).join(' ') || '—')}。官方EST ${num(f.official_est)}，官方溢价 ${fp(f.official_premium)}，EST日期 ${U.esc(f.est_date || '—')}。参考EST ${num(f.ref_est)}，参考溢价 ${fp(f.ref_premium)}。申购 ${U.esc(({ unknown: '未知', suspended: '暂停', limited: '限额', normal: '正常' })[f.subscription] || '未知')}。${U.esc(f.subscription_detail || '')}</div></details></td>
+    </tr>`;
   }
   function html(){
     const D = window.QDM;
@@ -95,7 +91,7 @@ window.QdiiMon = (() => {
         <p id="qdm-drag"></p>
         <p class="qdm-meta">期末财富倍数 = (1+净值年化)^年数 × (1+卖出溢价) / (1+买入溢价)。相对按净值买入的期末财富缺口 = 1 − (1+卖出溢价)/(1+买入溢价)。净值年化填的是这只基金净值的年化假设，不是指数的年化收益。15%、7%、10 年、0%：累计 +71.1%，年化 5.5%，期末倍数约 1.711，缺口 13.0%。</p>
       </div>
-      <details id="qdm-funds"><summary>九只基金的分项（默认收起）</summary>${funds.map(fundBlock).join('')}</details>
+      <details id="qdm-funds"><summary>九只基金的分项（默认收起）</summary><table class="tbl-compact"><tbody>${funds.map(fundBlock).join('')}</tbody></table></details>
     </div></section>`;
   }
   function drawDrag(){
