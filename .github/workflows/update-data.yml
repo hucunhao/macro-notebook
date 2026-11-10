@@ -7,6 +7,8 @@ on:
     - cron: '30 22 * * 1-5'   # 主时间：UTC 22:30（周一到周五）= 台北时间周二到周六 06:30，美股收盘之后
     - cron: '45 23 * * 1-5'   # 备用：UTC 23:45 = 台北时间 07:45。GitHub 定时任务常常迟到或漏发；已经更新过就直接结束
     - cron: '0 1 * * 2-6'     # 再备用：UTC 01:00 = 台北时间 09:00（周二到周六）。Cboe/FRED 早间常晚挂收盘价；这时再跑一次补齐
+# 指数期权伽马也走这一个工作流，不另开定时。22:30、23:45、次日 01:00（UTC）在 America/New_York
+# 冬令时和夏令时都晚于 16:00 现金收盘。盘中手动跑出来的快照不会记成每日收盘。
   workflow_dispatch: {}        # Actions 页面上的 “Run workflow” 按钮，手动跑一次（总是完整运行）
 
 permissions:
@@ -75,6 +77,19 @@ jobs:
         timeout-minutes: 40
         continue-on-error: true   # 失败时 data/sp500* 保持上一版，其它数据照常更新
 
+      # 标普、纳指指数期权伽马。只写 data/gex.js 和 data/gex.json。
+      # 源失败时脚本保留上一份并退出 0。脚本本身崩了也不挡住宏观数据提交（和成分股那一步一样）。
+      - name: 指数期权伽马快照
+        if: steps.fresh.outputs.skip != 'true'
+        run: python3 gex_monitor.py
+        continue-on-error: true
+
+      # 宏观数据已经更新过时，整段抓取会跳过。伽马收盘仍要试一次：同日重试不会改已记下的收盘。
+      - name: 宏观已最新时仍抓伽马收盘
+        id: gexskip
+        if: steps.fresh.outputs.skip == 'true'
+        run: python3 gex_monitor.py
+
       - name: 保存下载缓存
         if: always() && steps.fresh.outputs.skip != 'true'
         uses: actions/cache/save@v4
@@ -115,10 +130,36 @@ jobs:
           done
           echo "::error::推送 3 次都失败"; exit 1
 
+      - name: 宏观已最新时只提交伽马快照
+        id: gexcommit
+        if: steps.fresh.outputs.skip == 'true' && steps.gexskip.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          msg="指数期权伽马快照 $(TZ=Asia/Taipei date +%Y-%m-%d)"
+          for attempt in 1 2 3; do
+            git fetch --depth=50 origin main
+            tmp=$(mktemp -d)
+            cp data/gex.js data/gex.json "$tmp/" 2>/dev/null || true
+            git reset -q --hard origin/main
+            cp "$tmp"/gex.js "$tmp"/gex.json data/ 2>/dev/null || true
+            rm -rf "$tmp"
+            git add -A data/gex.js data/gex.json
+            if git diff --cached --quiet; then
+              echo "没有变化"; echo "pushed=false" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            git commit -q -m "$msg"
+            if git push origin HEAD:main; then
+              echo "pushed=true" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            echo "推送被拒，第 $attempt 次重试"; sleep $((attempt * 5))
+          done
+          echo "::error::伽马快照推送 3 次都失败"; exit 1
+
       # 用 GITHUB_TOKEN 推送的提交不会触发 Pages 的自动构建（GitHub 文档明确写了），
       # 所以这里显式请求一次构建。仅适用于 Pages 来源 = “Deploy from a branch”（build_type = legacy）。
       - name: 让 GitHub Pages 重新发布
-        if: steps.commit.outputs.pushed == 'true'
+        if: steps.commit.outputs.pushed == 'true' || steps.gexcommit.outputs.pushed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
