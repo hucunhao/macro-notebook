@@ -36,6 +36,7 @@ const Sources = (() => {
         <li><b>财报日历</b>：纳斯达克官网财报日历接口，只列标普 500 里市值 300 亿美元以上的公司。不含分析师预期。</li>
         <li><b>季节性</b>：用本站已有的标普 500（Cboe）和纳指 100（FRED）日线计算。</li>
         <li><b>估值监视器</b>（<a href="#/val">#/val</a>）：标普用 SPY 每日持仓当权重，纳指用 Invesco QQQ 持仓（都是 ETF，不是指数公司官方权重）。滚动市盈率用 SEC 最近四个季度的稀释每股收益（没有则用基本每股收益）和纳斯达克收盘价；前瞻用纳斯达克官网分析师一致预期（Zacks），优先未来四个财季相加。亏损公司按权重计入，市盈率不在 60 封顶。10 年分位是另一套公开序列：标普用 multpl.com 的月度市盈率，纳指用 Siblis Research 免费页上的年末点（不是逐月，也不是付费全历史），页面标「公开近似」。信息技术用维基百科 GICS 去对 SPY 代码。由 <code>valuation_data.py</code> 在 <code>update_data.py</code> 里生成 <code>data/valuation.js</code>，跟每日更新走。抓不到就写「数据暂缺」，不编数字。${window.VAL ? `本次：${VAL.generated}，价格截至 ${VAL.asof}。` : '本机还没生成。'}</li>
+        <li><b>指数期权伽马</b>（<a href="#/gex">#/gex</a>）：CBOE 公开延迟行情里的标普 500（<code>_SPX</code>，代码根 SPX / SPXW / SPXO）和纳斯达克 100（<code>_NDX</code>，代码根 NDX / NDXP）。不是 SPY、QQQ，也不拿它们当代理。由 <code>gex_monitor.py</code> 在每日数据更新里写 <code>data/gex.js</code>。浏览器不直接下载期权链。抓不到就留上一次的快照并标明过期，不编数字。</li>
         <li><b>做不到的</b>：实时新闻、经济数据的市场预期值仍是付费数据，没有做。财报日历里也不放分析师预期；一致预期只用在估值监视器。</li>
       </ul><p style="margin-bottom:0">这些都不需要登录，脚本的请求头写明是“个人研究脚本”，不伪装浏览器。东方财富是国内网站，GitHub 的美国服务器偶尔可能连不上；连不上时这一块沿用上次的数据，不影响其它部分。</p></div>
       <div class="card small" id="src-extra" style="margin-top:8px">正在读取新页面的抓取状态…</div>
