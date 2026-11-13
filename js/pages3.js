@@ -81,26 +81,53 @@ const Pages3 = (() => {
   async function cal(app){
     app.innerHTML = loadingHTML;
     try { await U.need('data/calendar.js'); } catch(e){ return fail(app, e, '经济日历'); }
-    const E = CAL.events, now = twNow(), today = now.slice(0, 10);
-    const st = U.store.get('ms_cal', { imp: false, all: false });
-    const nextOf = re => E.find(e => re.test(e.name) && (e.tw || e.date) >= now);
+    const E = CAL.events || [], now = twNow(), today = now.slice(0, 10);
+    const st = U.store.get('ms_cal', { imp: false, all: false, past: false });
+    const keyOf = e => e.source_key || (e.src === '美联储' ? '美联储 FOMC 日程' : `FRED 日历:${(e.url || '').match(/[?&]rid=(\d+)/)?.[1] || '?'}`);
+    const source = key => CAL.sources?.[key] || { status: CAL.status?.[key] || 'unknown' };
+    const recent = t => {
+      const age = Date.now() - Date.parse(String(t || '').replace(' ', 'T') + '+08:00');
+      return Number.isFinite(age) && age >= 0 && age <= 20*3600e3;
+    };
+    const checked = e => e.last_verified || source(keyOf(e)).last_success;
+    const stale = e => !!e.stale || source(keyOf(e)).status !== 'ok' || !recent(checked(e));
+    const dayOf = e => (e.tw || e.date).slice(0, 10);
+    const nextOf = re => E.filter(e => re.test(e.name) && (e.tw ? e.tw >= now : e.date >= today))
+      .sort((a, b) => (a.tw || a.date + ' 99').localeCompare(b.tw || b.date + ' 99'))[0];
     const days = t => Math.ceil((U.ts(t.slice(0, 10)) - U.ts(today)) / 86400);
-    const chip = (k, e) => e ? `<div class="chip"><div class="k">${k}</div><div class="v">${days(e.tw || e.date) === 0 ? '今天' : days(e.tw || e.date) + ' 天后'}</div><div class="hint">${(e.tw || e.date).slice(5)}（台北）</div></div>` : `<div class="chip"><div class="k">${k}</div><div class="v">—</div><div class="hint">窗口内没有</div></div>`;
+    const chip = (k, re, key) => {
+      const e = nextOf(re), src = source(key);
+      const missing = src.status !== 'ok' || !recent(src.last_success);
+      const value = e ? (stale(e) ? '待核实' : (days(e.tw || e.date) === 0 ? '今天' : days(e.tw || e.date) + ' 天后')) : '—';
+      const hint = e ? `${stale(e) ? '旧计划 ' : ''}${U.esc((e.tw || e.date).slice(5))}（台北）${e.tw ? '' : ' · 时间待定'}` : (missing ? '日程未更新，暂无法判断' : '窗口内暂无安排');
+      return `<div class="chip"><div class="k">${k}</div><div class="v">${value}</div><div class="hint">${hint}</div></div>`;
+    };
+    const keys = Object.keys({ ...(CAL.status || {}), ...(CAL.sources || {}) });
+    const failed = keys.filter(k => source(k).status !== 'ok' || !recent(source(k).last_success));
+    const incomplete = failed.length > 0 || E.some(stale) || !keys.length;
+    const warning = incomplete ? `<div class="cal-warning" role="status"><b>部分日程待核实</b> · ${failed.length ? failed.length + ' 个来源尚未取得近期核验结果。' : '缺少近期核验记录。'}以下旧计划仅供参考，空白不代表没有经济事件。</div>` : '';
     const IMP = { 3: '●●●', 2: '●●', 1: '●' };
     function draw(){
-      const end = U.dstr(U.ts(today) + (st.all ? 60 : 21)*86400);
-      const ev = E.filter(e => (!st.imp || e.imp >= 2) && (e.tw || e.date).slice(0, 10) <= end);
-      const by = {}; ev.forEach(e => { const k = (e.tw || e.date).slice(0, 10); (by[k] = by[k] || []).push(e); });
-      const wk = d => { const t = new Date(U.ts(d)*1000); return WD_ZH[t.getUTCDay()]; };
-      const thisWeekEnd = U.dstr(U.ts(today) + (7 - (new Date(U.ts(today)*1000).getUTCDay() || 7))*86400);
-      U.$('#cal-l').innerHTML = Object.keys(by).sort().map(d => `<div class="cal-day ${d < today ? 'past' : ''} ${d === today ? 'today' : ''}"><div class="d">${d.slice(5)} ${wk(d)}<small>${d === today ? '今天' : d <= thisWeekEnd && d > today ? '本周' : d < today ? '已发布' : ''}</small></div><div>
-        ${by[d].map(e => `<div class="cal-ev i${e.imp}"><span class="tm">${e.tw ? e.tw.slice(11) : '—'}</span><span class="imp" title="重要程度">${IMP[e.imp]}</span><span><span class="nm">${e.name}</span>　<span class="ds">${e.desc}</span></span></div>`).join('')}</div></div>`).join('') || '<div class="nodata">这段时间没有事件</div>';
+      const start = st.past ? U.dstr(U.ts(today) - 3*86400) : today;
+      const end = U.dstr(U.ts(today) + ((st.all ? 42 : 21) - 1)*86400);
+      const ev = E.filter(e => (!st.imp || e.imp >= 2) && dayOf(e) >= start && dayOf(e) <= end);
+      const by = {}; ev.forEach(e => { const k = dayOf(e); (by[k] = by[k] || []).push(e); });
+      const wk = d => WD_ZH[new Date(U.ts(d)*1000).getUTCDay()];
+      const eventHTML = e => {
+        const needsCheck = stale(e);
+        const timeLabel = e.tw && e.tw < now ? '计划时间已过，发布结果未核实' : dayOf(e) < today ? '计划日期已过，发布结果未核实' : '计划发布';
+        // 只链接已知官方来源，外部数据不能注入任意协议。
+        const url = e.src === '美联储' ? 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm' : (/^FRED 日历:\d+$/.test(keyOf(e)) ? `https://fred.stlouisfed.org/release?rid=${keyOf(e).split(':')[1]}` : null);
+        return `<div class="cal-ev i${e.imp}"><span class="tm">${e.tw ? U.esc(e.tw.slice(11)) : '待定'}</span><span class="imp" title="重要程度">${IMP[e.imp] || ''}</span><div><span class="nm">${U.esc(e.name)}</span>${needsCheck ? U.staleTag('待核实', '沿用旧日程或缺少近期核验；日期可能已变动') : ''} <span class="ds">${U.esc(e.desc)}</span><div class="hint">${timeLabel} · 最近核验：${U.esc(checked(e) || '未记录')}（台北时间）${url ? ` · <a href="${U.esc(url)}" target="_blank" rel="noopener noreferrer">${U.esc(e.src)} 来源 ↗</a>` : ''}</div></div></div>`;
+      };
+      U.$('#cal-l').innerHTML = Object.keys(by).sort().map(d => `<div class="cal-day ${d < today ? 'past' : ''} ${d === today ? 'today' : ''}"><div class="d">${d.slice(5)} ${wk(d)}<small>${d === today ? '今天' : d < today ? '过去的计划' : ''}</small></div><div>${by[d].sort((a,b) => (a.tw || a.date + ' 99').localeCompare(b.tw || b.date + ' 99')).map(eventHTML).join('')}</div></div>`).join('') || `<div class="nodata">${incomplete ? '日程未更新，暂无法判断这段时间是否有事件。' : '当前日期范围与筛选条件内暂无计划事件。'}</div>`;
     }
-    app.innerHTML = head('经济日历', '美国重要经济数据和美联储议息会议，时间都是台北时间', `<b>怎么用</b>：重要数据公布前后市场波动通常变大。●●● 最重要（CPI 通胀、非农就业、PCE 通胀、美联储决议）。<br><br>${CAL.note}<br>美国夏令时（3 月到 11 月初）期间，数据一般在台北时间晚上 20:30 公布，冬令时 21:30。<br>只列发布日期，不含市场预期值（那是付费数据）。`) +
-      `<div class="chips">${chip('下次美联储决议', nextOf(/FOMC/))}${chip('下次 CPI 通胀', nextOf(/CPI/))}${chip('下次非农就业', nextOf(/非农/))}${chip('下次 PCE 通胀', nextOf(/PCE/))}</div>
-      ${panel('', '日程', `${U.fresh(CAL.asof || CAL.generated.slice(0, 10), { session: CAL.session, partial: CAL.stale_n })} · 生成于 ${CAL.generated}（台北时间）`, `<div class="selrow" style="margin-bottom:4px"><label><input type="checkbox" id="cal-imp" ${st.imp ? 'checked' : ''}> 只看重要的（●● 以上）</label><label><input type="checkbox" id="cal-all" ${st.all ? 'checked' : ''}> 显示未来 6 周（默认 3 周）</label><a href="#/ern">看财报日历 →</a></div><div id="cal-l"></div>`)}`;
-    U.$('#cal-imp').onchange = e => { st.imp = e.target.checked; U.store.set('ms_cal', st); draw(); };
-    U.$('#cal-all').onchange = e => { st.all = e.target.checked; U.store.set('ms_cal', st); draw(); };
+    app.innerHTML = head('经济日历', '美国重要经济数据和美联储议息会议，时间都是台北时间', '<b>怎么用</b>：这里显示计划发布时间，不核验经济数据是否实际发布。待核实的旧日程请点击官方来源确认；倒计时只用于近期核验过的日程。') +
+      warning + `<div class="chips">${chip('下次美联储决议', /FOMC/, '美联储 FOMC 日程')}${chip('下次 CPI 通胀', /CPI/, 'FRED 日历:10')}${chip('下次非农就业', /非农/, 'FRED 日历:50')}${chip('下次 PCE 通胀', /PCE/, 'FRED 日历:54')}</div>` +
+      panel('', '日程', `最近尝试获取：${U.esc(CAL.last_attempt || CAL.generated || '未记录')}（台北时间） · 各来源核验时间见下方`, `<div class="selrow" style="margin-bottom:4px"><label><input type="checkbox" id="cal-imp" ${st.imp ? 'checked' : ''}> 只看重要的（●● 以上）</label><label><input type="checkbox" id="cal-all" ${st.all ? 'checked' : ''}> 显示未来 6 周（默认 3 周）</label><label><input type="checkbox" id="cal-past" ${st.past ? 'checked' : ''}> 显示过去 3 天的计划</label><a href="#/ern">看财报日历 →</a></div><div id="cal-l"></div>`);
+    for (const [id, key] of [['cal-imp', 'imp'], ['cal-all', 'all'], ['cal-past', 'past']]) {
+      U.$('#' + id).onchange = e => { st[key] = e.target.checked; U.store.set('ms_cal', st); draw(); };
+    }
     draw();
   }
 
