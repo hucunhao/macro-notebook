@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "generated": "2026-11-14 11:48",
+  "generated": "2026-11-14 15:19",
   "tz": "Asia/Taipei",
-  "last_success": "2026-11-14 11:48",
+  "last_success": "2026-11-14 15:19",
   "update_error": null,
   "partial": false,
   "advice": false,
@@ -43,7 +43,7 @@
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
       "stale": false,
-      "last_success": "2026-11-14 11:48"
+      "last_success": "2026-11-14 15:19"
     },
     {
       "code": "159941",
@@ -66,7 +66,7 @@
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
       "stale": false,
-      "last_success": "2026-11-14 11:48"
+      "last_success": "2026-11-14 15:19"
     },
     {
       "code": "513300",
@@ -89,7 +89,7 @@
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
       "stale": false,
-      "last_success": "2026-11-14 11:48"
+      "last_success": "2026-11-14 15:19"
     },
     {
       "code": "159501",
@@ -112,7 +112,7 @@
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
       "stale": false,
-      "last_success": "2026-11-14 11:48"
+      "last_success": "2026-11-14 15:19"
     },
     {
       "code": "159659",
@@ -135,7 +135,7 @@
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
       "stale": false,
-      "last_success": "2026-11-14 11:48"
+      "last_success": "2026-11-14 15:19"
     },
     {
       "code": "513500",
@@ -158,7 +158,7 @@
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
       "stale": false,
-      "last_success": "2026-11-14 11:48"
+      "last_success": "2026-11-14 15:19"
     },
     {
       "code": "513650",
@@ -181,7 +181,7 @@
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
       "stale": false,
-      "last_success": "2026-11-14 11:48"
+      "last_success": "2026-11-14 15:19"
     },
     {
       "code": "159655",
@@ -204,7 +204,7 @@
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
       "stale": false,
-      "last_success": "2026-11-14 11:48"
+      "last_success": "2026-11-14 15:19"
     },
     {
       "code": "159612",
@@ -227,7 +227,7 @@
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
       "stale": false,
-      "last_success": "2026-11-14 11:48"
+      "last_success": "2026-11-14 15:19"
     }
   ],
   "themes": {
@@ -313,7 +313,7 @@
     }
   },
   "history_gap": "T-1 和 EST 只积累本站抓到的观察。不足 30 个交易日时，图下面写明还差多少。收盘价÷公布净值的较长历史在原来的溢价图里，定义不同，不能当成这两列的过去。",
-  "last_attempt": "2026-11-14 11:48",
+  "last_attempt": "2026-11-14 15:19",
   "history_days": {
     "t1": 7,
     "official": 6,
