@@ -3,8 +3,8 @@
   "generated": "2026-11-17 12:50",
   "tz": "Asia/Taipei",
   "last_success": "2026-11-17 12:50",
-  "update_error": null,
-  "partial": false,
+  "update_error": "这些代码这次没有完整数字，已沿用上次非空快照，整表成功时间不往前拨：513100、159941、513300、159501、159659、513500、513650、159655、159612",
+  "partial": true,
   "advice": false,
   "note": "监视工具，不是买卖建议。T-1 和 EST 分列，不写成一个区间。",
   "sources": {
@@ -42,8 +42,9 @@
       "price_time": "11:30",
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
-      "stale": false,
-      "last_success": "2026-11-17 12:50"
+      "last_success": "2026-11-17 12:50",
+      "stale_reason": "这次缺 official_est、official_premium、price、ref_est、ref_premium、rt_est、rt_premium",
+      "stale": true
     },
     {
       "code": "159941",
@@ -65,8 +66,9 @@
       "price_time": "11:30",
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
-      "stale": false,
-      "last_success": "2026-11-17 12:50"
+      "last_success": "2026-11-17 12:50",
+      "stale_reason": "这次缺 official_est、official_premium、price、ref_est、ref_premium、rt_est、rt_premium",
+      "stale": true
     },
     {
       "code": "513300",
@@ -88,8 +90,9 @@
       "price_time": "11:30",
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
-      "stale": false,
-      "last_success": "2026-11-17 12:50"
+      "last_success": "2026-11-17 12:50",
+      "stale_reason": "这次缺 official_est、official_premium、price、ref_est、ref_premium、rt_est、rt_premium",
+      "stale": true
     },
     {
       "code": "159501",
@@ -111,8 +114,9 @@
       "price_time": "11:30",
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
-      "stale": false,
-      "last_success": "2026-11-17 12:50"
+      "last_success": "2026-11-17 12:50",
+      "stale_reason": "这次缺 official_est、official_premium、price、ref_est、ref_premium、rt_est、rt_premium",
+      "stale": true
     },
     {
       "code": "159659",
@@ -134,8 +138,9 @@
       "price_time": "11:30",
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
-      "stale": false,
-      "last_success": "2026-11-17 12:50"
+      "last_success": "2026-11-17 12:50",
+      "stale_reason": "这次缺 official_est、official_premium、price、ref_est、ref_premium、rt_est、rt_premium",
+      "stale": true
     },
     {
       "code": "513500",
@@ -157,8 +162,9 @@
       "price_time": "11:30",
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
-      "stale": false,
-      "last_success": "2026-11-17 12:50"
+      "last_success": "2026-11-17 12:50",
+      "stale_reason": "这次缺 official_est、official_premium、price、ref_est、ref_premium、rt_est、rt_premium",
+      "stale": true
     },
     {
       "code": "513650",
@@ -180,8 +186,9 @@
       "price_time": "11:30",
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
-      "stale": false,
-      "last_success": "2026-11-17 12:50"
+      "last_success": "2026-11-17 12:50",
+      "stale_reason": "这次缺 official_est、official_premium、price、ref_est、ref_premium、rt_est、rt_premium",
+      "stale": true
     },
     {
       "code": "159655",
@@ -203,8 +210,9 @@
       "price_time": "11:30",
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
-      "stale": false,
-      "last_success": "2026-11-17 12:50"
+      "last_success": "2026-11-17 12:50",
+      "stale_reason": "这次缺 official_est、official_premium、price、ref_est、ref_premium、rt_est、rt_premium",
+      "stale": true
     },
     {
       "code": "159612",
@@ -226,8 +234,9 @@
       "price_time": "11:30",
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
-      "stale": false,
-      "last_success": "2026-11-17 12:50"
+      "last_success": "2026-11-17 12:50",
+      "stale_reason": "这次缺 official_est、official_premium、price、ref_est、ref_premium、rt_est、rt_premium",
+      "stale": true
     }
   ],
   "themes": {
@@ -241,7 +250,7 @@
         "spread": 3.75,
         "n": 5,
         "missing": 0,
-        "stale_n": 0
+        "stale_n": 5
       },
       "official": {
         "median": 17.78,
@@ -250,7 +259,7 @@
         "spread": 3.83,
         "n": 5,
         "missing": 0,
-        "stale_n": 0
+        "stale_n": 5
       },
       "ref": {
         "median": 18.61,
@@ -259,7 +268,7 @@
         "spread": 3.87,
         "n": 5,
         "missing": 0,
-        "stale_n": 0
+        "stale_n": 5
       },
       "rt": {
         "median": 18.06,
@@ -268,7 +277,7 @@
         "spread": 3.84,
         "n": 5,
         "missing": 0,
-        "stale_n": 0
+        "stale_n": 5
       }
     },
     "spx": {
@@ -281,7 +290,7 @@
         "spread": 1.59,
         "n": 4,
         "missing": 0,
-        "stale_n": 0
+        "stale_n": 4
       },
       "official": {
         "median": 9.0,
@@ -290,7 +299,7 @@
         "spread": 1.57,
         "n": 4,
         "missing": 0,
-        "stale_n": 0
+        "stale_n": 4
       },
       "ref": {
         "median": 9.78,
@@ -299,7 +308,7 @@
         "spread": 1.59,
         "n": 4,
         "missing": 0,
-        "stale_n": 0
+        "stale_n": 4
       },
       "rt": {
         "median": 9.72,
@@ -308,12 +317,12 @@
         "spread": 1.59,
         "n": 4,
         "missing": 0,
-        "stale_n": 0
+        "stale_n": 4
       }
     }
   },
   "history_gap": "T-1 和 EST 只积累本站抓到的观察。不足 30 个交易日时，图下面写明还差多少。收盘价÷公布净值的较长历史在原来的溢价图里，定义不同，不能当成这两列的过去。",
-  "last_attempt": "2026-11-17 12:50",
+  "last_attempt": "2026-11-17 13:27",
   "history_days": {
     "t1": 8,
     "official": 8,
