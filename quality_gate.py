@@ -65,7 +65,7 @@ def main():
         try: o = json.load(open(os.path.join(D, name + '.json')))
         except Exception as e: warn(f'扩展数据 {name} 读不到（{e}），网页会显示“暂不可得”'); continue
         sn = o.get('stale_n')
-        ex = [k for k, v in (o.get('status') or {}).items() if v in (False, 'missing', 'cached')]
+        ex = [k for k, v in (o.get('status') or {}).items() if v in (False, 'missing', 'cached', 'parse_error')]
         print(f'扩展数据 {name}: 数据截至 {o.get("asof")}，对应美股交易日 {o.get("session")}，沿用旧数据 {sn if sn is not None else "—"} 条')
         if ex: warn(f'扩展数据 {name}: {len(ex)} 个请求没成功（不阻止发布）：' + ', '.join(ex[:10]))
     if bad:
