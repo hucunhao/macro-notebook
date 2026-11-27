@@ -12,7 +12,7 @@
       "name": "qdiilimit.com 场内表",
       "url": "https://qdiilimit.com/",
       "page_title": "2026年11月27日纳指100/标普500场内溢价、场外申购限额表",
-      "generated_on_page": "09:32 生成",
+      "generated_on_page": "15:30 生成",
       "definition": "T-1 日溢价率 = 前一日收盘价 / 最新公布净值 − 1。净值日期以格子 title 里的「净值YYYY-MM-DD」为准。"
     },
     "est": {
@@ -43,7 +43,7 @@
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
       "last_success": "2026-11-27 02:23",
-      "stale_reason": "这次来源没有这只",
+      "stale_reason": "这次缺 official_est、official_premium、price、ref_est、ref_premium、rt_est、rt_premium",
       "stale": true
     },
     {
@@ -115,7 +115,7 @@
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
       "last_success": "2026-11-27 02:23",
-      "stale_reason": "这次来源没有这只",
+      "stale_reason": "这次缺 official_est、official_premium、price、ref_est、ref_premium、rt_est、rt_premium",
       "stale": true
     },
     {
@@ -139,7 +139,7 @@
       "subscription": "unknown",
       "subscription_detail": "qdiilimit 场内表没有申购或限额列。未知，不当成正常。场外联接基金的暂停或限额不拿来推断这只 ETF。",
       "last_success": "2026-11-27 02:23",
-      "stale_reason": "这次来源没有这只",
+      "stale_reason": "这次缺 official_est、official_premium、price、ref_est、ref_premium、rt_est、rt_premium",
       "stale": true
     },
     {
@@ -322,7 +322,7 @@
     }
   },
   "history_gap": "T-1 和 EST 只积累本站抓到的观察。不足 30 个交易日时，图下面写明还差多少。收盘价÷公布净值的较长历史在原来的溢价图里，定义不同，不能当成这两列的过去。",
-  "last_attempt": "2026-11-27 13:38",
+  "last_attempt": "2026-11-27 17:23",
   "history_days": {
     "t1": 16,
     "official": 15,
