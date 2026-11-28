@@ -66,7 +66,9 @@ def get(url, path, timeout=40, check=None, headers=(), src=None):
 
 def prev(name):
     """上一版已提交的 data/{name}.json（抓取失败时沿用里面的内容）；没有就返回 {}"""
-    try: return json.load(open(os.path.join(OUT, name + '.json')))
+    try:
+        with open(os.path.join(OUT, name + '.json'), encoding='utf-8') as f:
+            return json.load(f)
     except Exception: return {}
 
 def us_session(now=None):
@@ -202,41 +204,80 @@ def _ct_to_taipei(day, tm):
         return local.astimezone(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d %H:%M')
     except Exception:
         return None
-def build_calendar():
-    vs, ve = TODAY - dt.timedelta(days=3), TODAY + dt.timedelta(days=45)
-    ev = []; old = prev('calendar'); fresh = 0; stale = 0
-    for rid, (nm, desc, imp) in RELEASES.items():
-        p = os.path.join(RAW, 'cal', f'fred_{rid}.html')
-        st = STATUS[f'FRED 日历:{rid}'] = get(f'https://fred.stlouisfed.org/releases/calendar?rid={rid}&vs={vs}&ve={ve}', p, check=lambda t: 'Economic Release Calendar' in t, src='fredcal')
-        time.sleep(0.4)
-        if _src_stale(st, p): stale += 1
-        else: fresh += 1
-        if not os.path.exists(p):   # 没有缓存文件：沿用上一版 data/calendar.json 里这一项的日程
-            ev += [dict(e, stale=True) for e in old.get('events', []) if e.get('src') == 'FRED' and e.get('url', '').endswith(f'rid={rid}')]
+def _calendar_key(event):
+    if event.get('src') == '美联储':
+        return '美联储 FOMC 日程'
+    match = re.search(r'[?&]rid=(\d+)(?:&|$)', event.get('url', ''))
+    return f'FRED 日历:{match[1]}' if match else None
+
+
+def _fred_calendar_events(text, rid):
+    """只解析实际出现的日程，不从发布日期规律推算。空结果交由调用方保守回退。"""
+    nm, desc, imp = RELEASES[rid]
+    events = []; day = None; tm = ''
+    for row in re.findall(r'<tr\b[^>]*>(.*?)</tr>', text, flags=re.S | re.I):
+        plain = html.unescape(re.sub('<[^>]+>', ' ', row))
+        match = re.search(r'([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})', plain)
+        if match and match[1] in MONTHS:
+            day = dt.date(int(match[3]), MONTHS[match[1]], int(match[2])); tm = ''
+        tds = re.findall(r'<td\b[^>]*>(.*?)</td>', row, flags=re.S | re.I)
+        if len(tds) < 2 or not day:
             continue
-        t = open(p, encoding='utf-8', errors='ignore').read(); tb = t[t.find('<tbody>'):]
-        day = None; tm = ''
-        for row in re.findall(r'<tr[^>]*>(.*?)</tr>', tb, flags=re.S):
-            m = re.search(r'font-weight: bold;">[A-Za-z]+ ([A-Za-z]+) (\d+), (\d{4})</span>', row)
-            if m: day = dt.date(int(m.group(3)), MONTHS[m.group(1)], int(m.group(2))); tm = ''; continue
-            tds = re.findall(r'<td[^>]*>(.*?)</td>', row, flags=re.S)
-            if len(tds) < 2 or not day: continue
-            tt = re.sub(r'\s+', ' ', re.sub('<[^>]+>', '', tds[0])).strip()
-            if tt: tm = tt
-            a = re.search(r'rid=(\d+)"', tds[1])
-            if a and int(a.group(1)) == rid:
-                ev.append(dict(date=day.isoformat(), tw=_ct_to_taipei(day, tm), name=nm, desc=desc, imp=imp, src='FRED', url=f'https://fred.stlouisfed.org/release?rid={rid}'))
+        tt = re.sub(r'\s+', ' ', html.unescape(re.sub('<[^>]+>', '', tds[0]))).strip()
+        if tt:
+            tm = tt
+        if re.search(rf'[?&]rid={rid}(?:[\"\'&\s>]|$)', html.unescape(tds[1])):
+            events.append(dict(date=day.isoformat(), tw=_ct_to_taipei(day, tm), name=nm,
+                               desc=desc, imp=imp, src='FRED', url=f'https://fred.stlouisfed.org/release?rid={rid}'))
+    return events
+
+
+def _calendar_source(key, parsed, status, old, sources, attempted_at):
+    """获取/解析失败不刷新核验时间。旧版全局 generated 不能证明单个来源已核验。"""
+    previous = (old.get('sources') or {}).get(key, {})
+    old_events = [e for e in old.get('events', []) if _calendar_key(e) == key]
+    if status == 'ok' and not parsed:
+        status = 'parse_error'  # HTTP 200 但没有可解析日程，不宣称窗口内确实无事件
+    verified = status == 'ok'
+    last_success = attempted_at if verified else previous.get('last_success')
+    sources[key] = dict(status=status, last_attempt=attempted_at, last_success=last_success)
+    STATUS[key] = status
+    rows = parsed or old_events
+    previous_by_date = {(e.get('date'), e.get('tw'), e.get('name')): e for e in old_events}
+    return [dict(e, source_key=key, stale=not verified,
+                 last_verified=attempted_at if verified else
+                 previous_by_date.get((e.get('date'), e.get('tw'), e.get('name')), e).get('last_verified'))
+            for e in rows]
+
+
+def build_calendar():
+    from zoneinfo import ZoneInfo
+    attempted_at = dt.datetime.now(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d %H:%M')
+    vs, ve = TODAY - dt.timedelta(days=3), TODAY + dt.timedelta(days=45)
+    ev = []; old = prev('calendar'); sources = {}
+    for rid in RELEASES:
+        key = f'FRED 日历:{rid}'
+        p = os.path.join(RAW, 'cal', f'fred_{rid}.html')
+        st = get(f'https://fred.stlouisfed.org/releases/calendar?rid={rid}&vs={vs}&ve={ve}', p,
+                 check=lambda t: 'Economic Release Calendar' in t, src='fredcal')
+        time.sleep(0.4)
+        parsed = []
+        if os.path.exists(p):
+            try:
+                with open(p, encoding='utf-8', errors='ignore') as f:
+                    parsed = _fred_calendar_events(f.read(), rid)
+            except (ValueError, KeyError):
+                st = 'parse_error'
+        ev += _calendar_source(key, parsed, st, old, sources, attempted_at)
     # FOMC：美联储官网会议日程；决议在第二天美东 14:00 公布
+    key = '美联储 FOMC 日程'
     p = os.path.join(RAW, 'cal', 'fomc.html')
-    st = STATUS['美联储 FOMC 日程'] = get('https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm', p, check=lambda t: 'FOMC Meetings' in t, src='fomc')
-    if _src_stale(st, p): stale += 1
-    else: fresh += 1
-    fomc = []
-    if not os.path.exists(p):
-        fomc = list(old.get('fomc', []))
-        ev += [dict(e, stale=True) for e in old.get('events', []) if e.get('src') == '美联储']
-    else:
-        t = open(p, encoding='utf-8', errors='ignore').read()
+    st = get('https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm', p,
+             check=lambda t: 'FOMC Meetings' in t, src='fomc')
+    fomc = []; parsed = []
+    if os.path.exists(p):
+        with open(p, encoding='utf-8', errors='ignore') as f:
+            t = f.read()
         for y in (TODAY.year, TODAY.year + 1):
             i = t.find(f'{y} FOMC Meetings')
             if i < 0: continue
@@ -245,22 +286,28 @@ def build_calendar():
                 mon = mon.split('/')[-1].strip(); nums = re.findall(r'\d+', dd)
                 if mon not in MONTHS or not nums: continue
                 m2 = MONTHS[mon]; d2 = int(nums[-1])
-                if len(nums) > 1 and int(nums[-1]) < int(nums[0]): m2 = m2 % 12 + 1   # 跨月会议，如 Apr/May 30-1
+                if len(nums) > 1 and int(nums[-1]) < int(nums[0]): m2 = m2 % 12 + 1
                 try: last = dt.date(y, m2, d2)
                 except ValueError: continue
                 sep = '*' in dd
                 fomc.append(last.isoformat())
-                if vs <= last <= ve:
-                    try:
-                        from zoneinfo import ZoneInfo
-                        tw = dt.datetime(last.year, last.month, last.day, 14, 0, tzinfo=ZoneInfo('America/New_York')).astimezone(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d %H:%M')
-                    except Exception: tw = None
-                    ev.append(dict(date=last.isoformat(), tw=tw, name='美联储议息会议（FOMC）决议', desc='决定联邦基金利率' + ('；这次会公布经济预测和点阵图' if sep else ''), imp=3, src='美联储', url='https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm'))
-    ev.sort(key=lambda e: (e['tw'] or e['date'] + ' 99', -e['imp']))
-    out = dict(events=ev, fomc=fomc, from_=vs.isoformat(), to=ve.isoformat(), generated=dt.datetime.now().strftime('%Y-%m-%d %H:%M'),
-                note='时间已换算成台北时间。发布日期来自 FRED 发布日历（美国中部时间）和美联储官网；政府停摆等情况会让日期变动，以官方为准。')
-    if not fresh: out['generated'] = old.get('generated', out['generated'])
-    return stamp(out, old, fresh > 0, stale, TODAY.isoformat() if fresh else (old.get('asof') or (old.get('generated') or '')[:10] or None))
+                tw = dt.datetime(last.year, last.month, last.day, 14, 0, tzinfo=ZoneInfo('America/New_York')).astimezone(ZoneInfo('Asia/Taipei')).strftime('%Y-%m-%d %H:%M')
+                parsed.append(dict(date=last.isoformat(), tw=tw, name='美联储议息会议（FOMC）决议',
+                                   desc='决定联邦基金利率' + ('；这次会公布经济预测和点阵图' if sep else ''), imp=3,
+                                   src='美联储', url='https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm'))
+    ev += _calendar_source(key, parsed, st, old, sources, attempted_at)
+    if not fomc:
+        fomc = list(old.get('fomc', []))
+    # 缓存回退也必须遵守当前窗口；以页面实际展示的台北日期为准。
+    ev = [e for e in ev if vs.isoformat() <= (e.get('tw') or e['date'])[:10] <= ve.isoformat()]
+    ev = list({(e['source_key'], e['date'], e.get('tw'), e['name']): e for e in ev}.values())
+    ev.sort(key=lambda e: (e.get('tw') or e['date'] + ' 99', -e['imp']))
+    fresh = sum(s['status'] == 'ok' for s in sources.values())
+    out = dict(events=ev, fomc=fomc, sources=sources, from_=vs.isoformat(), to=ve.isoformat(),
+               generated=attempted_at, last_attempt=attempted_at,
+               note='时间已换算成台北时间。这里只记录计划发布日期，不代表数据已实际发布；安排可能变动，以官方来源为准。')
+    return stamp(out, old, fresh > 0, len(sources) - fresh,
+                 TODAY.isoformat() if fresh else old.get('asof'))
 
 # ---------------------------------------------------------------- 3. 财报日历（纳斯达克公开接口）
 def _money(s):
@@ -499,7 +546,7 @@ def run():
             obj = fn()
             obj['status'] = {k: v for k, v in STATUS.items() if k not in before}
             n_new, n_old = _count(name, obj), _count(name, prev(name))
-            if n_new == 0 and n_old > 0:   # 保险：这次一条都没有，就不覆盖上一版
+            if name != 'calendar' and n_new == 0 and n_old > 0:   # 日历已有逐来源回退，空窗口也要发布故障状态；其它块保险：这次一条都没有，就不覆盖上一版
                 meta[name] = 'kept previous (0 items)'; continue
             dump(name, var, obj)
             meta[name] = f"ok {n_new} 条，沿用旧数据 {obj.get('stale_n', 0)} 条，数据截至 {obj.get('asof')}"

@@ -1,0 +1,44 @@
+name: 经济日历回归检查
+
+on:
+  pull_request:
+    paths:
+      - 'extra_data.py'
+      - 'quality_gate.py'
+      - 'js/pages3.js'
+      - 'js/util.js'
+      - 'css/style.css'
+      - 'test_calendar.py'
+      - 'test_calendar_view.mjs'
+      - '.github/workflows/calendar-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'extra_data.py'
+      - 'quality_gate.py'
+      - 'js/pages3.js'
+      - 'js/util.js'
+      - 'css/style.css'
+      - 'test_calendar.py'
+      - 'test_calendar_view.mjs'
+      - '.github/workflows/calendar-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  calendar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 数据回退、解析和时间转换
+        run: python3 -m unittest -v test_calendar.py
+      - name: 日程状态、日期筛选和旧版数据兼容
+        run: node test_calendar_view.mjs
